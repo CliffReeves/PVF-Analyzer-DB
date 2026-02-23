@@ -39,6 +39,11 @@ ALLOWED_EMAIL_DOMAIN = os.environ.get("ALLOWED_EMAIL_DOMAIN", "")
 app = Flask(__name__, static_folder=str(BASE_DIR), static_url_path="")
 app.secret_key = SECRET_KEY
 
+# Trust Render's (and any reverse proxy's) X-Forwarded-Proto / X-Forwarded-Host
+# headers so url_for(_external=True) produces https:// URLs correctly.
+from werkzeug.middleware.proxy_fix import ProxyFix
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+
 # ---------------------------------------------------------------------------
 # Google OAuth setup
 # ---------------------------------------------------------------------------
