@@ -9,7 +9,6 @@ import os
 import json
 import traceback
 from pathlib import Path
-from functools import wraps
 from flask import Flask, request, jsonify, send_from_directory, session, redirect, url_for
 from dotenv import load_dotenv
 
@@ -83,7 +82,14 @@ def auth_login():
 
 @app.route("/auth/callback")
 def auth_callback():
-    token     = oauth.google.authorize_access_token()
+    try:
+        token     = oauth.google.authorize_access_token()
+    except Exception as e:
+        traceback.print_exc()
+        return (
+            f"<h2>OAuth Error</h2><pre>{e}</pre>"
+            f'<p><a href="/auth/login">Try again</a></p>'
+        ), 500
     user_info = token.get("userinfo")
     if not user_info:
         return "Login failed: no user info returned.", 400
@@ -582,28 +588,6 @@ def bidder_patterns():
     Returns how often each bidder is the lowest price, by item_type.
     """
     try:
-        sql = """
-            WITH ranked AS (
-                SELECT i.item_type,
-                       b.bidder_id,
-                       b.unit_price,
-                       RANK() OVER (PARTITION BY i.id ORDER BY b.unit_price) AS rnk
-                FROM rfq_items i
-                JOIN bids b ON b.item_id = i.id
-                WHERE b.unit_price IS NOT NULL AND b.unit_price > 0
-                  AND i.rfq_id IN (SELECT rfq_id FROM rfqs WHERE is_potential=0)
-            )
-            SELECT i.item_type, d.name AS bidder,
-                   COUNT(*) AS times_lowest,
-                   AVG(r.unit_price) AS avg_price_when_lowest
-            FROM ranked r
-            JOIN bidders d ON d.id = r.bidder_id
-            JOIN (SELECT DISTINCT id, item_type FROM rfq_items) i ON 1=1
-            WHERE r.rnk = 1
-            GROUP BY i.item_type, d.name
-            ORDER BY i.item_type, times_lowest DESC
-        """
-        # Simplified version that works reliably
         sql2 = """
             SELECT
                 i.item_type,
@@ -867,8 +851,6 @@ def estimate_rfq(rfq_id):
             hist_by_type.setdefault(row["item_type"], []).append(row)
 
         # ── 4. Match and estimate each target item ───────────────────────────
-        import statistics
-
         estimates = []
         total_low = total_mean = total_high = 0.0
         uncovered = 0
