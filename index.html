@@ -636,6 +636,7 @@ function closeModal(e) {
 
 // ---------------------------------------------------------------- LOAD RFQ
 async function loadFileList() {
+  resetLoad();
   const files = await fetch('/api/files').then(r=>r.json());
   if (files.error) { document.getElementById('file-list-grid').innerHTML = `<div class="alert alert-error">${files.error}</div>`; return; }
 
@@ -779,16 +780,20 @@ async function doLoad() {
   const r = await fetch('/api/load-rfq', {method:'POST', body:JSON.stringify(payload), headers:{'Content-Type':'application/json'}});
   const d = await r.json();
 
-  document.getElementById('btn-load').disabled = false;
-  document.getElementById('btn-load').innerHTML = '✓ Load into Database';
-
   if (d.error) {
+    document.getElementById('btn-load').disabled = false;
+    document.getElementById('btn-load').innerHTML = '✓ Load into Database';
     document.getElementById('load-status').innerHTML = `<div class="alert alert-error">Error: ${d.error}</div>`;
     return;
   }
+
+  // Success — keep button disabled to prevent double-load
+  document.getElementById('btn-load').disabled = true;
+  document.getElementById('btn-load').innerHTML = '✓ Loaded';
   document.getElementById('load-status').innerHTML = `
     <div class="alert alert-success">
-      ✓ Loaded <strong>${d.rfq_id}</strong> — ${d.items} items, bidders: ${(d.bidders||[]).join(', ')||'none'}
+      ✓ Loaded <strong>${d.rfq_id}</strong> — ${d.items} items, bidders: ${(d.bidders||[]).join(', ')||'none'}.
+      Click <em>← Start Over</em> to load another file.
     </div>`;
 }
 
@@ -798,6 +803,8 @@ function resetLoad() {
   document.querySelectorAll('.file-card').forEach(c=>c.classList.remove('selected'));
   document.getElementById('file-upload').value = '';
   document.getElementById('btn-preview').disabled = true;
+  document.getElementById('btn-load').disabled = false;
+  document.getElementById('btn-load').innerHTML = '✓ Load into Database';
   ['rfq-id','rfq-creator','rfq-station','rfq-date','rfq-notes'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('load-status').innerHTML = '';
   document.getElementById('reload-warning').style.display = 'none';

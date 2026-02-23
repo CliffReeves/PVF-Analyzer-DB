@@ -57,7 +57,10 @@ def _find_header_row(rows):
 def _detect_format_b(header_cols):
     """
     Format B: any column header matches BIDDER_UNIT_PRICE or BIDDER_TOTAL_PRICE pattern.
+    Handles both underscore-separated (WHITCO_UNIT_PRICE) and
+    space-separated (WHITCO UNIT PRICE) variants, including EXT> PRICE typo.
     """
+    # Underscore-separated detection (original)
     for h in header_cols:
         s = _norm(h)
         if s and "_" in s:
@@ -65,15 +68,27 @@ def _detect_format_b(header_cols):
             if parts[-1] in {"unit_price", "unit price", "total_price", "total price",
                               "unit_cost", "ext_price", "ext_cost", "unit cost", "ext cost"}:
                 return True
-            # Also check BIDDER_UNIT_PRICE with explicit pattern
             if re.search(r"(unit.?price|unit.?cost|total.?price|ext.?price|ext.?cost)", s):
                 return True
-    # More robust: check if ANY header has pattern WORD_UNITPRICE
     for h in header_cols:
         s = str(h).strip() if h else ""
         if re.match(r"^[A-Z][A-Z0-9\-]+_(UNIT_PRICE|TOTAL_PRICE|UNIT_COST|EXT_COST|EXT_PRICE)",
                     s, re.IGNORECASE):
             return True
+    # Space-separated detection: "BIDDER UNIT PRICE", "BIDDER EXT. PRICE", "BIDDER EXT> PRICE"
+    _PRICE_ENDINGS_2W = {
+        "unit price", "unit cost", "total price",
+        "ext price", "ext. price", "extended price",
+        "ext cost", "ext. cost", "extended cost",
+    }
+    for h in header_cols:
+        if not h:
+            continue
+        words = str(h).strip().lower().replace(">", ".").split()
+        if len(words) >= 3:
+            last_two = " ".join(words[-2:])
+            if last_two in _PRICE_ENDINGS_2W:
+                return True
     return False
 
 
@@ -116,7 +131,7 @@ def _parse_format_b(rows, header_idx, header_cols):
                     matched_field  = "ext_price"
                     break
 
-        # Fallback: regex split on well-known patterns
+        # Fallback: regex split on well-known underscore patterns
         if not matched_bidder:
             m = re.match(
                 r"^(.+?)_(UNIT.?PRICE|UNIT.?COST|TOTAL.?PRICE|EXT.?PRICE|EXT.?COST)$",
@@ -129,6 +144,20 @@ def _parse_format_b(rows, header_idx, header_cols):
                     matched_field = "unit_price"
                 else:
                     matched_field = "ext_price"
+
+        # Fallback: space-separated "BIDDER UNIT PRICE" / "BIDDER EXT. PRICE"
+        # Also handles EXT> PRICE typo (> instead of .)
+        if not matched_bidder:
+            words = s.replace(">", ".").split()
+            if len(words) >= 3:
+                last_two = " ".join(words[-2:]).lower()
+                if last_two in {"unit price", "unit cost"}:
+                    matched_bidder = words[0].upper()
+                    matched_field  = "unit_price"
+                elif last_two in {"total price", "ext price", "ext. price",
+                                  "extended price", "ext cost", "ext. cost", "extended cost"}:
+                    matched_bidder = words[0].upper()
+                    matched_field  = "ext_price"
 
         if matched_bidder and matched_field:
             if matched_bidder not in bidder_map:
