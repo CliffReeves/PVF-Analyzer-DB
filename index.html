@@ -1,0 +1,1296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RFQ Bid Manager — PVF</title>
+<style>
+  :root {
+    --navy:   #1a2744;
+    --blue:   #2563eb;
+    --sky:    #e8f0fe;
+    --green:  #16a34a;
+    --red:    #dc2626;
+    --amber:  #d97706;
+    --grey:   #6b7280;
+    --light:  #f8fafc;
+    --border: #e2e8f0;
+    --radius: 8px;
+    --shadow: 0 2px 8px rgba(0,0,0,0.10);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f1f5f9; color: #1e293b; }
+  a { color: var(--blue); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* ---- NAV ---- */
+  #navbar {
+    background: var(--navy);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    padding: 0 24px;
+    height: 54px;
+    position: sticky; top: 0; z-index: 100;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+  }
+  #navbar .brand { font-size: 1.15rem; font-weight: 700; letter-spacing: .5px; margin-right: 32px; white-space: nowrap; }
+  #navbar .brand span { color: #93c5fd; }
+  .nav-links { display: flex; gap: 4px; flex: 1; }
+  .nav-links button {
+    background: none; border: none; color: rgba(255,255,255,.75);
+    padding: 6px 14px; border-radius: 6px; cursor: pointer;
+    font-size: .9rem; font-weight: 500; transition: background .15s, color .15s;
+  }
+  .nav-links button:hover, .nav-links button.active {
+    background: rgba(255,255,255,.15); color: #fff;
+  }
+  #api-indicator {
+    font-size: .78rem; padding: 4px 10px; border-radius: 20px;
+    background: rgba(255,255,255,.1); cursor: pointer;
+  }
+  #api-indicator.ok  { background: #14532d; color: #86efac; }
+  #api-indicator.bad { background: #7f1d1d; color: #fca5a5; }
+  #user-info { display: none; align-items: center; gap: 8px; margin-left: 14px; }
+  #user-avatar { width: 28px; height: 28px; border-radius: 50%; display: none; border: 2px solid rgba(255,255,255,.3); }
+  #user-name { font-size: .82rem; color: rgba(255,255,255,.9); max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #logout-btn { font-size: .75rem; padding: 3px 10px; border-radius: 20px; background: rgba(255,255,255,.12); color: rgba(255,255,255,.75); text-decoration: none; border: 1px solid rgba(255,255,255,.2); transition: background .15s; }
+  #logout-btn:hover { background: rgba(255,255,255,.22); color: #fff; text-decoration: none; }
+
+  /* ---- PAGES ---- */
+  .page { display: none; max-width: 1200px; margin: 0 auto; padding: 28px 20px; }
+  .page.active { display: block; }
+
+  /* ---- CARDS ---- */
+  .card {
+    background: #fff; border-radius: var(--radius);
+    box-shadow: var(--shadow); padding: 24px; margin-bottom: 20px;
+  }
+  .card-title { font-size: 1rem; font-weight: 700; color: var(--navy); margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+
+  /* ---- STATS ---- */
+  .stats-row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
+  .stat-box {
+    background: #fff; border-radius: var(--radius); box-shadow: var(--shadow);
+    padding: 18px 22px; min-width: 140px; flex: 1;
+  }
+  .stat-box .val { font-size: 2rem; font-weight: 800; color: var(--blue); }
+  .stat-box .lbl { font-size: .8rem; color: var(--grey); margin-top: 2px; }
+
+  /* ---- TABLES ---- */
+  .tbl-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: .875rem; }
+  th { background: var(--navy); color: #fff; text-align: left; padding: 9px 12px; font-weight: 600; font-size: .8rem; letter-spacing: .3px; white-space: nowrap; }
+  td { padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tr:hover td { background: var(--sky); }
+  tr:last-child td { border-bottom: none; }
+  .num { text-align: right; }
+  .money { text-align: right; font-family: monospace; }
+
+  /* ---- BUTTONS ---- */
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 9px 18px; border-radius: 6px; border: none;
+    cursor: pointer; font-size: .875rem; font-weight: 600;
+    transition: filter .15s;
+  }
+  .btn:hover { filter: brightness(.9); }
+  .btn-primary { background: var(--blue);  color: #fff; }
+  .btn-success { background: var(--green); color: #fff; }
+  .btn-danger  { background: var(--red);   color: #fff; }
+  .btn-ghost   { background: #e2e8f0; color: #334155; }
+  .btn-sm      { padding: 5px 12px; font-size: .8rem; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; filter: none; }
+
+  /* ---- FORM ---- */
+  .form-group { margin-bottom: 16px; }
+  label { display: block; font-size: .82rem; font-weight: 600; color: #475569; margin-bottom: 5px; }
+  input[type=text], input[type=date], select, textarea {
+    width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: 6px;
+    font-size: .875rem; background: #fff; color: #1e293b;
+    transition: border-color .15s;
+  }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(37,99,235,.15); }
+  .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+
+  /* ---- BADGES ---- */
+  .badge {
+    display: inline-block; padding: 2px 8px; border-radius: 12px;
+    font-size: .75rem; font-weight: 600;
+  }
+  .badge-blue   { background: #dbeafe; color: #1d4ed8; }
+  .badge-green  { background: #dcfce7; color: #15803d; }
+  .badge-amber  { background: #fef3c7; color: #92400e; }
+  .badge-red    { background: #fee2e2; color: #b91c1c; }
+  .badge-grey   { background: #f1f5f9; color: #475569; }
+
+  /* ---- ALERTS ---- */
+  .alert { padding: 12px 16px; border-radius: 6px; margin-bottom: 16px; font-size: .875rem; }
+  .alert-warn   { background: #fffbeb; border: 1px solid #fbbf24; color: #78350f; }
+  .alert-info   { background: #eff6ff; border: 1px solid #93c5fd; color: #1e3a5f; }
+  .alert-error  { background: #fef2f2; border: 1px solid #fca5a5; color: #7f1d1d; }
+  .alert-success{ background: #f0fdf4; border: 1px solid #86efac; color: #14532d; }
+
+  /* ---- QUERY ---- */
+  #query-box {
+    width: 100%; padding: 12px; border: 2px solid var(--border); border-radius: 8px;
+    font-size: .95rem; resize: vertical; min-height: 80px;
+  }
+  #query-box:focus { border-color: var(--blue); outline: none; }
+  .sql-block { background: #1e293b; color: #93c5fd; padding: 14px; border-radius: 6px; font-family: monospace; font-size: .8rem; overflow-x: auto; white-space: pre-wrap; margin: 12px 0; }
+  .query-suggestions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+  .suggestion {
+    background: var(--sky); color: var(--blue); border: 1px solid #bfdbfe;
+    border-radius: 20px; padding: 5px 14px; font-size: .8rem; cursor: pointer;
+    transition: background .15s;
+  }
+  .suggestion:hover { background: #dbeafe; }
+
+  /* ---- ANALYSIS ---- */
+  .tab-bar { display: flex; gap: 0; border-bottom: 2px solid var(--border); margin-bottom: 20px; }
+  .tab-btn {
+    padding: 10px 18px; border: none; background: none; cursor: pointer;
+    font-size: .875rem; font-weight: 600; color: var(--grey);
+    border-bottom: 3px solid transparent; margin-bottom: -2px;
+    transition: color .15s, border-color .15s;
+  }
+  .tab-btn.active { color: var(--blue); border-bottom-color: var(--blue); }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* ---- MISC ---- */
+  .loading { display: inline-block; width: 18px; height: 18px; border: 3px solid #bfdbfe; border-top-color: var(--blue); border-radius: 50%; animation: spin .7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .empty-state { text-align: center; padding: 40px; color: var(--grey); }
+  .empty-state svg { width: 56px; height: 56px; margin: 0 auto 12px; display: block; opacity: .35; }
+  .text-green { color: var(--green); } .text-red { color: var(--red); }
+  .text-grey  { color: var(--grey); }
+  .mt-8 { margin-top: 8px; } .mt-16 { margin-top: 16px; } .mt-24 { margin-top: 24px; }
+  .flex-end { display: flex; justify-content: flex-end; gap: 10px; }
+  .inline-load { display: flex; align-items: center; gap: 10px; color: var(--grey); font-size: .875rem; }
+
+  /* ---- FILE PICKER ---- */
+  .file-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+  .file-card {
+    border: 2px solid var(--border); border-radius: var(--radius); padding: 14px;
+    cursor: pointer; transition: border-color .15s, background .15s;
+  }
+  .file-card:hover, .file-card.selected { border-color: var(--blue); background: var(--sky); }
+  .file-card .fname { font-weight: 600; font-size: .875rem; word-break: break-all; }
+  .file-card .fsize { font-size: .75rem; color: var(--grey); margin-top: 3px; }
+
+  /* ---- PREVIEW TABLE ---- */
+  .preview-wrap { max-height: 280px; overflow-y: auto; }
+  .preview-wrap table td { font-size: .78rem; }
+
+  /* ---- RFQ DETAIL MODAL ---- */
+  #modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,.55); z-index: 200; overflow-y: auto;
+  }
+  #modal-overlay.active { display: flex; align-items: flex-start; justify-content: center; padding: 40px 20px; }
+  #modal-box {
+    background: #fff; border-radius: 12px; box-shadow: 0 20px 60px rgba(0,0,0,.3);
+    width: 100%; max-width: 1100px; padding: 28px;
+  }
+  #modal-box h2 { font-size: 1.1rem; color: var(--navy); margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+  #modal-box h2 button { background: none; border: none; font-size: 1.3rem; cursor: pointer; color: var(--grey); }
+
+  /* responsive */
+  @media (max-width: 640px) {
+    .form-row { grid-template-columns: 1fr; }
+    .stats-row { gap: 10px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav id="navbar">
+  <div class="brand">RFQ Bid Manager &nbsp;<span>PVF</span></div>
+  <div class="nav-links">
+    <button class="active" onclick="showPage('dashboard')">Dashboard</button>
+    <button onclick="showPage('load')">Load RFQ</button>
+    <button onclick="showPage('browse')">Browse</button>
+    <button onclick="showPage('query')">AI Query</button>
+    <button onclick="showPage('analysis')">Analysis</button>
+  </div>
+  <span id="api-indicator" class="bad" onclick="showApiDialog()" title="Click to configure API key">⚙ API Key</span>
+  <span id="user-info">
+    <img id="user-avatar" src="" alt="">
+    <span id="user-name"></span>
+    <a id="logout-btn" href="/auth/logout">Sign out</a>
+  </span>
+</nav>
+
+<!-- ============================================================ DASHBOARD -->
+<div id="page-dashboard" class="page active">
+  <div class="stats-row" id="stat-boxes">
+    <div class="stat-box"><div class="val" id="stat-rfqs">—</div><div class="lbl">RFQs Loaded</div></div>
+    <div class="stat-box"><div class="val" id="stat-items">—</div><div class="lbl">Line Items</div></div>
+    <div class="stat-box"><div class="val" id="stat-bidders">—</div><div class="lbl">Bidders</div></div>
+    <div class="stat-box"><div class="val" id="stat-potential">—</div><div class="lbl">Potential RFQs</div></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Recent RFQs</div>
+    <div class="tbl-wrap" id="dashboard-table">
+      <div class="inline-load"><span class="loading"></span> Loading…</div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ LOAD RFQ -->
+<div id="page-load" class="page">
+
+  <!-- Step 1: File picker -->
+  <div class="card" id="step1">
+    <div class="card-title">Step 1 — Select Spreadsheet</div>
+    <div id="file-list-grid" class="file-grid">
+      <div class="inline-load"><span class="loading"></span> Scanning folder…</div>
+    </div>
+    <div class="mt-16">
+      <label style="font-size:.82rem;color:var(--grey)">Or upload a file from your computer:</label>
+      <input type="file" id="file-upload" accept=".xlsx,.xls" style="margin-top:6px;">
+    </div>
+    <div class="flex-end mt-16">
+      <button class="btn btn-primary" id="btn-preview" disabled onclick="doPreview()">Preview File →</button>
+    </div>
+  </div>
+
+  <!-- Step 2: Preview + metadata -->
+  <div class="card" id="step2" style="display:none">
+    <div class="card-title">Step 2 — Review & Confirm</div>
+    <div id="preview-area"></div>
+    <div id="ambiguity-area"></div>
+
+    <div class="mt-16">
+      <div class="card-title" style="font-size:.9rem">RFQ Metadata</div>
+      <div class="form-row">
+        <div class="form-group"><label>RFQ ID *</label><input type="text" id="rfq-id" placeholder="e.g. HGA-2025-01"></div>
+        <div class="form-group"><label>Created By</label><input type="text" id="rfq-creator"></div>
+        <div class="form-group"><label>Station / Project</label><input type="text" id="rfq-station"></div>
+        <div class="form-group"><label>RFQ Date</label><input type="date" id="rfq-date"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Sheet to Load</label>
+          <select id="rfq-sheet"></select>
+        </div>
+        <div class="form-group">
+          <label>Type</label>
+          <select id="rfq-type">
+            <option value="0">Full RFQ with Bids</option>
+            <option value="1">Potential RFQ (no bids yet)</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group"><label>Notes (optional)</label><textarea id="rfq-notes" rows="2" style="resize:vertical"></textarea></div>
+    </div>
+
+    <div id="reload-warning" class="alert alert-warn" style="display:none">
+      ⚠ An RFQ with this ID already exists. Saving will replace it.
+    </div>
+    <div id="load-status"></div>
+
+    <div class="flex-end mt-16">
+      <button class="btn btn-ghost" onclick="resetLoad()">← Start Over</button>
+      <button class="btn btn-success" id="btn-load" onclick="doLoad()">✓ Load into Database</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ BROWSE -->
+<div id="page-browse" class="page">
+  <div class="card">
+    <div class="card-title">All RFQs</div>
+    <div class="tbl-wrap" id="browse-table">
+      <div class="inline-load"><span class="loading"></span> Loading…</div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ QUERY -->
+<div id="page-query" class="page">
+  <div class="card">
+    <div class="card-title">AI-Powered Query</div>
+    <p style="font-size:.875rem;color:var(--grey);margin-bottom:14px">Ask anything about your RFQ database in plain English. Claude will generate and run the SQL.</p>
+
+    <div class="form-group">
+      <label>Focus on a specific RFQ (optional)</label>
+      <select id="query-rfq-filter"><option value="">All RFQs</option></select>
+    </div>
+
+    <label style="font-size:.82rem;font-weight:600;color:#475569;margin-bottom:5px;display:block">Your Question</label>
+    <textarea id="query-box" placeholder="e.g. What is the lowest total bid for RFQ HGA-2025-01?"></textarea>
+
+    <div class="query-suggestions" id="suggestions"></div>
+
+    <div class="flex-end mt-16">
+      <button class="btn btn-primary" id="btn-query" onclick="doQuery()">Ask Claude →</button>
+    </div>
+  </div>
+
+  <div id="query-result" style="display:none" class="card">
+    <div class="card-title">Result</div>
+    <div id="query-explanation" class="alert alert-info" style="margin-bottom:12px"></div>
+    <div id="query-sql"></div>
+    <div id="query-table" class="mt-8"></div>
+  </div>
+</div>
+
+<!-- ============================================================ ANALYSIS -->
+<div id="page-analysis" class="page">
+  <div class="form-group" style="max-width:360px;margin-bottom:20px">
+    <label>Select RFQ</label>
+    <select id="analysis-rfq-select" onchange="clearAnalysis()"><option value="">— choose an RFQ —</option></select>
+  </div>
+
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="switchTab('award')">Award Scenarios</button>
+    <button class="tab-btn" onclick="switchTab('cv')">Price Variance</button>
+    <button class="tab-btn" onclick="switchTab('trends')">Price Trends</button>
+    <button class="tab-btn" onclick="switchTab('patterns')">Bidder Patterns</button>
+    <button class="tab-btn" onclick="switchTab('subset')">Subset Optimization</button>
+    <button class="tab-btn" onclick="switchTab('estimate')">Cost Estimate</button>
+  </div>
+
+  <!-- Award Scenarios -->
+  <div id="tab-award" class="tab-panel active">
+    <div class="card">
+      <div class="card-title">Award Scenarios</div>
+      <button class="btn btn-primary btn-sm mb-2" onclick="runAward()">Run Analysis</button>
+      <div id="award-result" class="mt-16"></div>
+    </div>
+  </div>
+
+  <!-- Price Variance (CV) -->
+  <div id="tab-cv" class="tab-panel">
+    <div class="card">
+      <div class="card-title">Coefficient of Variance by Item</div>
+      <button class="btn btn-primary btn-sm" onclick="runCV()">Run Analysis</button>
+      <div id="cv-result" class="mt-16"></div>
+    </div>
+  </div>
+
+  <!-- Price Trends -->
+  <div id="tab-trends" class="tab-panel">
+    <div class="card">
+      <div class="card-title">Price Trends Across RFQs</div>
+      <div class="form-row" style="max-width:600px">
+        <div class="form-group">
+          <label>Item Type (leave blank for all)</label>
+          <input type="text" id="trends-type" placeholder="PIPE, VALVE, GASKET…">
+        </div>
+        <div class="form-group">
+          <label>Description Contains</label>
+          <input type="text" id="trends-desc" placeholder="keyword">
+        </div>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="runTrends()">Fetch Data</button>
+      <div id="trends-result" class="mt-16"></div>
+    </div>
+  </div>
+
+  <!-- Bidder Patterns -->
+  <div id="tab-patterns" class="tab-panel">
+    <div class="card">
+      <div class="card-title">Bidder Pricing Patterns by Item Type</div>
+      <button class="btn btn-primary btn-sm" onclick="runPatterns()">Run Analysis</button>
+      <div id="patterns-result" class="mt-16"></div>
+    </div>
+  </div>
+
+  <!-- Subset Optimization -->
+  <div id="tab-subset" class="tab-panel">
+    <div class="card">
+      <div class="card-title">Subset Optimization — Lowest Cost by Number of Bidders</div>
+      <p style="font-size:.85rem;color:var(--grey);margin-bottom:14px">
+        For each value of k (1 bidder, 2 bidders, … all bidders), finds the exact combination
+        that minimises total cost when every line item is awarded to the cheapest bidder in
+        the subset. Shows the point of diminishing returns so you can decide whether splitting
+        across more suppliers is worth the overhead.
+      </p>
+      <button class="btn btn-primary btn-sm" onclick="runSubsetEnum()">Run Analysis</button>
+
+      <!-- Summary table — one row per k -->
+      <div id="subset-summary" class="mt-16"></div>
+
+      <!-- Drill-down: per-item breakdown for a selected k -->
+      <div id="subset-detail" style="display:none;margin-top:24px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div class="card-title" style="margin:0" id="subset-detail-title">Item Breakdown</div>
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('subset-detail').style.display='none'">✕ Close</button>
+        </div>
+        <div class="tbl-wrap" id="subset-detail-table"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cost Estimate (Potential RFQs) -->
+  <div id="tab-estimate" class="tab-panel">
+    <div class="card">
+      <div class="card-title">Historical Cost Estimation</div>
+      <p style="font-size:.85rem;color:var(--grey);margin-bottom:14px">
+        Estimates likely pricing for each line item by matching against historical bids
+        with the same item type and similar specification. Works best when multiple prior
+        RFQs are loaded. Select any RFQ — potential or already-bid.
+      </p>
+      <button class="btn btn-primary btn-sm" onclick="runEstimate()">Run Estimation</button>
+
+      <div id="estimate-summary" class="mt-16"></div>
+      <div id="estimate-table"  class="mt-8"></div>
+
+      <!-- Match detail panel (shown on row click) -->
+      <div id="estimate-detail" style="display:none;margin-top:20px;background:var(--sky);border-radius:var(--radius);padding:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <strong id="estimate-detail-title" style="font-size:.9rem"></strong>
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('estimate-detail').style.display='none'">✕</button>
+        </div>
+        <div id="estimate-detail-matches"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ MODAL (RFQ Detail) -->
+<div id="modal-overlay" onclick="closeModal(event)">
+  <div id="modal-box">
+    <h2>RFQ Detail <button onclick="closeModal()">✕</button></h2>
+    <div id="modal-content"></div>
+  </div>
+</div>
+
+<!-- ============================================================ SCRIPT -->
+<script>
+const API = '';    // relative — same host
+let selectedFile  = null;
+let previewData   = null;
+let rfqList       = [];
+
+// ---------------------------------------------------------------- NAV
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-links button').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  event.currentTarget.classList.add('active');
+
+  if (name === 'dashboard') loadDashboard();
+  if (name === 'browse')    loadBrowse();
+  if (name === 'query')     loadQuerySelects();
+  if (name === 'analysis')  loadAnalysisSelect();
+  if (name === 'load')      loadFileList();
+}
+
+// ---------------------------------------------------------------- AUTH
+async function checkAuth() {
+  try {
+    const r = await fetch('/api/me');
+    if (r.status === 401) { window.location.href = '/auth/login'; return; }
+    const u = await r.json();
+    if (u.email) {
+      const info = document.getElementById('user-info');
+      info.style.display = 'flex';
+      document.getElementById('user-name').textContent = u.name || u.email;
+      const av = document.getElementById('user-avatar');
+      if (u.picture) { av.src = u.picture; av.style.display = 'block'; }
+    }
+  } catch (e) { /* network error — leave UI as-is */ }
+}
+
+// ---------------------------------------------------------------- API KEY
+async function checkApiKey() {
+  const r = await fetch('/api/config');
+  const d = await r.json();
+  const el = document.getElementById('api-indicator');
+  if (d.has_api_key) { el.classList.remove('bad'); el.classList.add('ok'); el.textContent = '✓ API Key'; }
+  else               { el.classList.remove('ok');  el.classList.add('bad'); el.textContent = '⚙ API Key'; }
+}
+function showApiDialog() {
+  const key = prompt('Enter your Anthropic API key (starts with sk-ant-):\n(Stored in memory only for this session)');
+  if (!key) return;
+  fetch('/api/config', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({api_key: key}) })
+    .then(() => checkApiKey());
+}
+
+// ---------------------------------------------------------------- DASHBOARD
+async function loadDashboard() {
+  const [rfqs, bidders] = await Promise.all([
+    fetch('/api/rfqs').then(r=>r.json()),
+    fetch('/api/bidders').then(r=>r.json())
+  ]);
+  rfqList = rfqs;
+  const loaded = rfqs.filter(r=>!r.is_potential);
+  const potential = rfqs.filter(r=>r.is_potential);
+  const totalItems = rfqs.reduce((s,r) => s + (r.item_count||0), 0);
+
+  document.getElementById('stat-rfqs').textContent     = loaded.length;
+  document.getElementById('stat-items').textContent    = totalItems;
+  document.getElementById('stat-bidders').textContent  = bidders.length;
+  document.getElementById('stat-potential').textContent = potential.length;
+
+  const tbody = rfqs.slice(0,10).map(r => `
+    <tr>
+      <td><a href="#" onclick="viewRFQ('${r.rfq_id}');return false">${r.rfq_id}</a></td>
+      <td>${r.station||'—'}</td>
+      <td>${r.rfq_date||'—'}</td>
+      <td>${r.creator||'—'}</td>
+      <td class="num">${r.item_count}</td>
+      <td class="num">${r.bidder_count}</td>
+      <td>${r.is_potential ? '<span class="badge badge-amber">Potential</span>' : '<span class="badge badge-green">Loaded</span>'}</td>
+    </tr>`).join('');
+
+  document.getElementById('dashboard-table').innerHTML = `
+    <table>
+      <thead><tr><th>RFQ ID</th><th>Station</th><th>Date</th><th>Creator</th><th>Items</th><th>Bidders</th><th>Status</th></tr></thead>
+      <tbody>${tbody || '<tr><td colspan="7" class="empty-state">No RFQs loaded yet.</td></tr>'}</tbody>
+    </table>`;
+}
+
+// ---------------------------------------------------------------- BROWSE
+async function loadBrowse() {
+  const rfqs = await fetch('/api/rfqs').then(r=>r.json());
+  rfqList = rfqs;
+  const tbody = rfqs.map(r => `
+    <tr>
+      <td><a href="#" onclick="viewRFQ('${r.rfq_id}');return false">${r.rfq_id}</a></td>
+      <td>${r.station||'—'}</td>
+      <td>${r.rfq_date||'—'}</td>
+      <td>${r.creator||'—'}</td>
+      <td class="num">${r.item_count}</td>
+      <td class="num">${r.bidder_count}</td>
+      <td>${r.source_file||'—'}</td>
+      <td>${r.is_potential ? '<span class="badge badge-amber">Potential</span>' : '<span class="badge badge-green">Loaded</span>'}</td>
+      <td>
+        <button class="btn btn-ghost btn-sm" onclick="viewRFQ('${r.rfq_id}')">View</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteRFQ('${r.rfq_id}')">Delete</button>
+      </td>
+    </tr>`).join('');
+
+  document.getElementById('browse-table').innerHTML = `
+    <table>
+      <thead><tr><th>RFQ ID</th><th>Station</th><th>Date</th><th>Creator</th><th>Items</th><th>Bidders</th><th>Source File</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody>${tbody||'<tr><td colspan="9" style="text-align:center;padding:30px;color:#999">No RFQs loaded yet.</td></tr>'}</tbody>
+    </table>`;
+}
+
+async function deleteRFQ(id) {
+  if (!confirm(`Delete RFQ "${id}" and all its bids? This cannot be undone.`)) return;
+  await fetch('/api/rfq/' + id, {method:'DELETE'});
+  loadBrowse();
+  loadDashboard();
+}
+
+// ---------------------------------------------------------------- RFQ DETAIL MODAL
+async function viewRFQ(id) {
+  document.getElementById('modal-overlay').classList.add('active');
+  document.getElementById('modal-content').innerHTML = '<div class="inline-load"><span class="loading"></span> Loading…</div>';
+
+  const d = await fetch('/api/rfq/' + id).then(r=>r.json());
+  if (d.error) { document.getElementById('modal-content').innerHTML = `<div class="alert alert-error">${d.error}</div>`; return; }
+
+  const bidders = [...new Set(d.items.flatMap(i => i.bids.map(b => b.bidder)))].sort();
+
+  const head = bidders.map(b=>`<th colspan="2" style="text-align:center">${b}</th>`).join('');
+  const subhead = bidders.map(_=>'<th class="money">Unit $</th><th class="money">Ext $</th>').join('');
+
+  const rows = d.items.map(item => {
+    const bidCells = bidders.map(b => {
+      const bid = item.bids.find(x=>x.bidder===b);
+      return bid
+        ? `<td class="money">${bid.unit_price!=null ? '$'+fmt2(bid.unit_price) : '—'}</td><td class="money">${bid.ext_price!=null ? '$'+fmt2(bid.ext_price) : '—'}</td>`
+        : `<td class="money text-grey">—</td><td class="money text-grey">—</td>`;
+    }).join('');
+    return `<tr>
+      <td>${item.item_number}</td>
+      <td><span class="badge badge-grey">${item.item_type||'?'}</span></td>
+      <td style="max-width:280px;font-size:.78rem">${item.specification||''}${item.size?' <em>('+item.size+')</em>':''}</td>
+      <td class="num">${item.quantity!=null?item.quantity:''} ${item.unit||''}</td>
+      ${bidCells}
+    </tr>`;
+  }).join('');
+
+  document.getElementById('modal-content').innerHTML = `
+    <div style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:16px;font-size:.875rem">
+      <div><b>Station:</b> ${d.station||'—'}</div>
+      <div><b>Date:</b> ${d.rfq_date||'—'}</div>
+      <div><b>Creator:</b> ${d.creator||'—'}</div>
+      <div><b>Source:</b> ${d.source_file||'—'} / ${d.sheet_name||'—'}</div>
+      <div><b>Items:</b> ${d.items.length}</div>
+    </div>
+    <div class="tbl-wrap" style="max-height:500px;overflow:auto">
+      <table>
+        <thead>
+          <tr><th rowspan="2">Item</th><th rowspan="2">Type</th><th rowspan="2">Specification</th><th rowspan="2">Qty</th>${head}</tr>
+          <tr>${subhead}</tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+function closeModal(e) {
+  if (!e || e.target === document.getElementById('modal-overlay')) {
+    document.getElementById('modal-overlay').classList.remove('active');
+  }
+}
+
+// ---------------------------------------------------------------- LOAD RFQ
+async function loadFileList() {
+  const files = await fetch('/api/files').then(r=>r.json());
+  if (files.error) { document.getElementById('file-list-grid').innerHTML = `<div class="alert alert-error">${files.error}</div>`; return; }
+
+  if (!files.length) {
+    document.getElementById('file-list-grid').innerHTML = '<p style="color:var(--grey);font-size:.875rem">No .xlsx files found in the database folder. Upload one below.</p>';
+    return;
+  }
+  document.getElementById('file-list-grid').innerHTML = files.map(f=>`
+    <div class="file-card" onclick="selectFile(this,'${f.path.replace(/'/g,"\\'")}','${f.name.replace(/'/g,"\\'")}')" data-path="${f.path}">
+      <div class="fname">📄 ${f.name}</div>
+      <div class="fsize">${(f.size/1024).toFixed(1)} KB</div>
+    </div>`).join('');
+}
+
+function selectFile(el, path, name) {
+  document.querySelectorAll('.file-card').forEach(c=>c.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedFile = {path, name};
+  document.getElementById('btn-preview').disabled = false;
+}
+
+document.getElementById('file-upload').addEventListener('change', function() {
+  if (this.files[0]) {
+    selectedFile = {upload: this.files[0], name: this.files[0].name};
+    document.getElementById('btn-preview').disabled = false;
+  }
+});
+
+async function doPreview() {
+  document.getElementById('btn-preview').disabled = true;
+  document.getElementById('btn-preview').innerHTML = '<span class="loading"></span> Parsing…';
+
+  let body, opts;
+  if (selectedFile.upload) {
+    const fd = new FormData();
+    fd.append('file', selectedFile.upload);
+    body = fd; opts = {method:'POST', body};
+  } else {
+    body = JSON.stringify({filepath: selectedFile.path});
+    opts = {method:'POST', body, headers:{'Content-Type':'application/json'}};
+  }
+
+  const r = await fetch('/api/parse-preview', opts);
+  const d = await r.json();
+  document.getElementById('btn-preview').disabled = false;
+  document.getElementById('btn-preview').innerHTML = 'Preview File →';
+
+  if (d.error) {
+    alert('Parse error: ' + d.error);
+    return;
+  }
+  previewData = d;
+  showPreview(d);
+}
+
+function showPreview(d) {
+  document.getElementById('step2').style.display = 'block';
+  document.getElementById('step2').scrollIntoView({behavior:'smooth'});
+
+  // Sheet selector
+  const sheetSel = document.getElementById('rfq-sheet');
+  sheetSel.innerHTML = d.sheets.map(s=>`<option value="${s}" ${s===d.sheet_used?'selected':''}>${s}</option>`).join('');
+  sheetSel.onchange = () => {
+    previewData.filepath = selectedFile.path || previewData.filepath;
+    fetch('/api/parse-preview', {method:'POST', body:JSON.stringify({filepath:previewData.filepath, sheet_name:sheetSel.value}), headers:{'Content-Type':'application/json'}})
+      .then(r=>r.json()).then(d2=>{previewData=d2; showPreview(d2);});
+  };
+
+  // Summary
+  document.getElementById('preview-area').innerHTML = `
+    <div class="alert alert-info">
+      <strong>Detected:</strong> ${d.item_count} line items &nbsp;|&nbsp;
+      Bidders: ${d.bidders.length ? d.bidders.join(', ') : '(none)'} &nbsp;|&nbsp;
+      Format: ${d.format}
+    </div>
+    <div class="card-title" style="font-size:.85rem;margin-top:8px">Sample Items (first 6)</div>
+    <div class="preview-wrap">
+      <table>
+        <thead><tr><th>Item#</th><th>Type</th><th>Specification</th><th>Size</th><th>Unit</th><th>Qty</th>${d.bidders.map(b=>`<th>${b} UP</th>`).join('')}</tr></thead>
+        <tbody>${(d.sample_items||[]).map(i=>`<tr>
+          <td>${i.item_number}</td>
+          <td><span class="badge badge-grey">${i.item_type||'?'}</span></td>
+          <td style="max-width:200px;font-size:.75rem">${i.specification||''}</td>
+          <td>${i.size||''}</td>
+          <td>${i.unit||''}</td>
+          <td class="num">${i.quantity||''}</td>
+          ${d.bidders.map(b=>`<td class="money">${i.bids[b]&&i.bids[b].unit_price!=null ? '$'+fmt2(i.bids[b].unit_price) : '—'}</td>`).join('')}
+        </tr>`).join('')}</tbody>
+      </table>
+    </div>`;
+
+  // Ambiguities
+  const ambWrap = document.getElementById('ambiguity-area');
+  if (d.ambiguities && d.ambiguities.length) {
+    ambWrap.innerHTML = d.ambiguities.map(a=>`<div class="alert alert-warn">⚠ ${a}</div>`).join('');
+  } else {
+    ambWrap.innerHTML = '';
+  }
+
+  // Auto-fill date from filename if possible
+  const m = d.filename.match(/(\d{1,2}[-–]\d{1,2}[-–]\d{2,4})/);
+  if (m && !document.getElementById('rfq-date').value) {
+    try {
+      const parts = m[1].split(/[-–]/);
+      if (parts.length === 3) {
+        const yr = parts[2].length===2 ? '20'+parts[2] : parts[2];
+        document.getElementById('rfq-date').value = `${yr}-${parts[0].padStart(2,'0')}-${parts[1].padStart(2,'0')}`;
+      }
+    } catch(e){}
+  }
+}
+
+document.getElementById('rfq-id').addEventListener('input', async function() {
+  const id = this.value.trim();
+  const w = document.getElementById('reload-warning');
+  if (!id) { w.style.display='none'; return; }
+  const rfqs = await fetch('/api/rfqs').then(r=>r.json());
+  w.style.display = rfqs.some(r=>r.rfq_id===id) ? 'block' : 'none';
+});
+
+async function doLoad() {
+  const rfq_id = document.getElementById('rfq-id').value.trim();
+  if (!rfq_id) { alert('RFQ ID is required.'); return; }
+  if (!previewData) { alert('Please preview a file first.'); return; }
+
+  document.getElementById('btn-load').disabled = true;
+  document.getElementById('btn-load').innerHTML = '<span class="loading"></span> Loading…';
+  document.getElementById('load-status').innerHTML = '';
+
+  const payload = {
+    rfq_id,
+    creator:     document.getElementById('rfq-creator').value.trim(),
+    station:     document.getElementById('rfq-station').value.trim(),
+    rfq_date:    document.getElementById('rfq-date').value,
+    filepath:    previewData.filepath,
+    sheet_name:  document.getElementById('rfq-sheet').value,
+    is_potential: document.getElementById('rfq-type').value === '1',
+    notes:       document.getElementById('rfq-notes').value.trim(),
+  };
+
+  const r = await fetch('/api/load-rfq', {method:'POST', body:JSON.stringify(payload), headers:{'Content-Type':'application/json'}});
+  const d = await r.json();
+
+  document.getElementById('btn-load').disabled = false;
+  document.getElementById('btn-load').innerHTML = '✓ Load into Database';
+
+  if (d.error) {
+    document.getElementById('load-status').innerHTML = `<div class="alert alert-error">Error: ${d.error}</div>`;
+    return;
+  }
+  document.getElementById('load-status').innerHTML = `
+    <div class="alert alert-success">
+      ✓ Loaded <strong>${d.rfq_id}</strong> — ${d.items} items, bidders: ${(d.bidders||[]).join(', ')||'none'}
+    </div>`;
+}
+
+function resetLoad() {
+  selectedFile = null; previewData = null;
+  document.getElementById('step2').style.display = 'none';
+  document.querySelectorAll('.file-card').forEach(c=>c.classList.remove('selected'));
+  document.getElementById('file-upload').value = '';
+  document.getElementById('btn-preview').disabled = true;
+  ['rfq-id','rfq-creator','rfq-station','rfq-date','rfq-notes'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('load-status').innerHTML = '';
+  document.getElementById('reload-warning').style.display = 'none';
+}
+
+// ---------------------------------------------------------------- QUERY
+const SUGGESTIONS = [
+  "What is the lowest total bid for the selected RFQ?",
+  "Which bidder is consistently cheapest on pipes?",
+  "Show me all valve bids sorted by unit price.",
+  "Compare unit prices for all gaskets across all RFQs.",
+  "Which items have the largest price spread between bidders?",
+  "What is the total extended price if we award to the lowest bidder for each item?",
+  "Show me all bids where unit price is above $100.",
+  "Which bidder has the most complete bids (fewest no-quotes)?",
+];
+
+async function loadQuerySelects() {
+  const rfqs = await fetch('/api/rfqs').then(r=>r.json());
+  const sel = document.getElementById('query-rfq-filter');
+  sel.innerHTML = '<option value="">All RFQs</option>' + rfqs.map(r=>`<option value="${r.rfq_id}">${r.rfq_id} — ${r.station||''}</option>`).join('');
+
+  const sugg = document.getElementById('suggestions');
+  sugg.innerHTML = SUGGESTIONS.map(s=>`<span class="suggestion" onclick="fillQuery('${s.replace(/'/g,"\\'")}')">💬 ${s}</span>`).join('');
+}
+
+function fillQuery(s) { document.getElementById('query-box').value = s; }
+
+async function doQuery() {
+  const question = document.getElementById('query-box').value.trim();
+  if (!question) { alert('Please enter a question.'); return; }
+
+  document.getElementById('btn-query').disabled = true;
+  document.getElementById('btn-query').innerHTML = '<span class="loading"></span> Asking Claude…';
+  document.getElementById('query-result').style.display = 'none';
+
+  const payload = {
+    question,
+    rfq_id: document.getElementById('query-rfq-filter').value || undefined
+  };
+
+  const r = await fetch('/api/query', {method:'POST', body:JSON.stringify(payload), headers:{'Content-Type':'application/json'}});
+  const d = await r.json();
+
+  document.getElementById('btn-query').disabled = false;
+  document.getElementById('btn-query').innerHTML = 'Ask Claude →';
+
+  document.getElementById('query-result').style.display = 'block';
+
+  if (d.error) {
+    document.getElementById('query-explanation').className = 'alert alert-error';
+    document.getElementById('query-explanation').textContent = d.error;
+    document.getElementById('query-sql').innerHTML = '';
+    document.getElementById('query-table').innerHTML = '';
+    return;
+  }
+
+  document.getElementById('query-explanation').className = 'alert alert-info';
+  document.getElementById('query-explanation').textContent = d.explanation;
+  document.getElementById('query-sql').innerHTML = d.sql ? `<div class="sql-block">${d.sql}</div>` : '';
+
+  if (d.error) {
+    document.getElementById('query-table').innerHTML = `<div class="alert alert-error">Query error: ${d.error}</div>`;
+    return;
+  }
+
+  if (!d.rows || !d.rows.length) {
+    document.getElementById('query-table').innerHTML = '<p style="color:var(--grey);padding:16px">No results.</p>';
+    return;
+  }
+
+  const cols = Object.keys(d.rows[0]);
+  const thead = cols.map(c=>`<th>${c}</th>`).join('');
+  const tbody = d.rows.map(row => '<tr>' + cols.map(c=>{
+    const v = row[c];
+    const isNum = typeof v === 'number' && c.toLowerCase().includes('price');
+    return `<td class="${isNum?'money':''}">${v!=null ? (isNum?'$'+fmt2(v):v) : '—'}</td>`;
+  }).join('') + '</tr>').join('');
+
+  document.getElementById('query-table').innerHTML = `
+    <div class="tbl-wrap"><table><thead><tr>${thead}</tr></thead><tbody>${tbody}</tbody></table></div>
+    <p style="font-size:.78rem;color:var(--grey);margin-top:8px">${d.row_count} row(s) returned</p>`;
+}
+
+// ---------------------------------------------------------------- ANALYSIS
+async function loadAnalysisSelect() {
+  const rfqs = await fetch('/api/rfqs').then(r=>r.json());
+  const sel = document.getElementById('analysis-rfq-select');
+  const opts = rfqs.map(r => {
+    const label = r.is_potential
+      ? `${r.rfq_id} — ${r.station||''} ⟨Potential⟩`
+      : `${r.rfq_id} — ${r.station||''}`;
+    return `<option value="${r.rfq_id}" data-potential="${r.is_potential}">${label}</option>`;
+  }).join('');
+  sel.innerHTML = '<option value="">— choose an RFQ —</option>' + opts;
+}
+
+function clearAnalysis() {
+  ['award-result','cv-result','trends-result','patterns-result',
+   'subset-summary','estimate-summary','estimate-table'].forEach(id=>{
+    document.getElementById(id).innerHTML='';
+  });
+  document.getElementById('subset-detail').style.display  = 'none';
+  document.getElementById('estimate-detail').style.display = 'none';
+}
+
+function switchTab(name) {
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+  document.getElementById('tab-'+name).classList.add('active');
+}
+
+async function runAward() {
+  const id = document.getElementById('analysis-rfq-select').value;
+  if (!id) { alert('Select an RFQ first.'); return; }
+  document.getElementById('award-result').innerHTML = '<div class="inline-load"><span class="loading"></span> Calculating…</div>';
+
+  const d = await fetch(`/api/analysis/award-scenarios/${id}`).then(r=>r.json());
+  if (d.error) { document.getElementById('award-result').innerHTML = `<div class="alert alert-error">${d.error}</div>`; return; }
+
+  // Bidder totals
+  const totalsHtml = `
+    <div class="card-title" style="font-size:.875rem;margin-bottom:8px">Complete Bid Totals (by Bidder)</div>
+    <table style="margin-bottom:20px">
+      <thead><tr><th>Bidder</th><th>Total Ext. Price</th><th>Items Bid</th></tr></thead>
+      <tbody>${(d.bidder_totals||[]).map((r,i)=>`
+        <tr>
+          <td>${r.bidder}${i===0?'&nbsp;<span class="badge badge-green">Lowest Complete</span>':''}</td>
+          <td class="money">$${fmt2(r.total_ext)}</td>
+          <td class="num">${r.items_bid}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+
+  // Best by item
+  const bestTotal = d.best_total||0;
+  const bestItemsHtml = `
+    <div class="card-title" style="font-size:.875rem;margin-bottom:8px">Lowest Possible Award (Best Price Per Item) — Total: <strong>$${fmt2(bestTotal)}</strong></div>
+    <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Item</th><th>Type</th><th>Specification</th><th>Qty</th><th>Best Bidder</th><th>Unit $</th><th>Ext $</th></tr></thead>
+      <tbody>${(d.best_by_item||[]).map(r=>`
+        <tr>
+          <td>${r.item_number}</td>
+          <td><span class="badge badge-grey">${r.item_type||'?'}</span></td>
+          <td style="font-size:.78rem;max-width:220px">${r.specification||''}</td>
+          <td class="num">${r.quantity||''}</td>
+          <td><span class="badge badge-blue">${r.best_bidder}</span></td>
+          <td class="money">$${fmt2(r.best_unit_price)}</td>
+          <td class="money">$${fmt2(r.best_ext_price)}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table></div>`;
+
+  document.getElementById('award-result').innerHTML = totalsHtml + bestItemsHtml;
+}
+
+async function runCV() {
+  const id = document.getElementById('analysis-rfq-select').value;
+  if (!id) { alert('Select an RFQ first.'); return; }
+  document.getElementById('cv-result').innerHTML = '<div class="inline-load"><span class="loading"></span> Calculating…</div>';
+
+  const d = await fetch(`/api/analysis/cv/${id}`).then(r=>r.json());
+  if (d.error) { document.getElementById('cv-result').innerHTML = `<div class="alert alert-error">${d.error}</div>`; return; }
+
+  const cvHtml = `
+    <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Item</th><th>Type</th><th>Specification</th><th># Bids</th><th>Min $</th><th>Max $</th><th>Mean $</th><th>Std Dev</th><th>CV %</th></tr></thead>
+      <tbody>${(d.items||[]).map(r=>{
+        const cvClass = r.cv_pct > 30 ? 'text-red' : r.cv_pct > 15 ? 'text-amber' : '';
+        const amberStyle = r.cv_pct > 15 && r.cv_pct <= 30 ? 'style="color:var(--amber)"' : '';
+        return `<tr>
+          <td>${r.item_number}</td>
+          <td><span class="badge badge-grey">${r.item_type||'?'}</span></td>
+          <td style="font-size:.78rem;max-width:200px">${r.specification||''}</td>
+          <td class="num">${r.bid_count}</td>
+          <td class="money">$${fmt2(r.min_price)}</td>
+          <td class="money">$${fmt2(r.max_price)}</td>
+          <td class="money">$${fmt2(r.mean_price)}</td>
+          <td class="money">${r.stdev!=null?'$'+fmt2(r.stdev):'—'}</td>
+          <td class="num ${cvClass}" ${amberStyle}><strong>${r.cv_pct!=null?r.cv_pct+'%':'—'}</strong></td>
+        </tr>`}).join('')}
+      </tbody>
+    </table></div>
+    <p style="font-size:.78rem;color:var(--grey);margin-top:8px">Sorted by CV% descending. High CV% indicates high price variation across bidders.</p>`;
+
+  document.getElementById('cv-result').innerHTML = cvHtml;
+}
+
+async function runTrends() {
+  const type = document.getElementById('trends-type').value.trim();
+  const desc = document.getElementById('trends-desc').value.trim();
+  document.getElementById('trends-result').innerHTML = '<div class="inline-load"><span class="loading"></span> Fetching…</div>';
+
+  const params = new URLSearchParams();
+  if (type) params.set('item_type', type);
+  if (desc) params.set('description_like', desc);
+
+  const d = await fetch(`/api/analysis/price-trends?${params}`).then(r=>r.json());
+  if (d.error) { document.getElementById('trends-result').innerHTML = `<div class="alert alert-error">${d.error}</div>`; return; }
+
+  if (!d.rows || !d.rows.length) {
+    document.getElementById('trends-result').innerHTML = '<p style="color:var(--grey)">No data found for those filters.</p>';
+    return;
+  }
+
+  const cols = ['rfq_id','rfq_date','station','item_type','specification','size','unit','bidder','unit_price','ext_price','quantity'];
+  const thead = cols.map(c=>`<th>${c.replace('_',' ')}</th>`).join('');
+  const tbody = d.rows.map(r=>'<tr>'+cols.map(c=>{
+    const v = r[c];
+    return `<td class="${c.includes('price')?'money':''}" style="font-size:.78rem">${v!=null?(c.includes('price')?'$'+fmt2(v):v):'—'}</td>`;
+  }).join('')+'</tr>').join('');
+
+  document.getElementById('trends-result').innerHTML = `
+    <div class="tbl-wrap">
+    <table><thead><tr>${thead}</tr></thead><tbody>${tbody}</tbody></table></div>
+    <p style="font-size:.78rem;color:var(--grey);margin-top:8px">${d.count} rows</p>`;
+}
+
+async function runPatterns() {
+  document.getElementById('patterns-result').innerHTML = '<div class="inline-load"><span class="loading"></span> Calculating…</div>';
+  const d = await fetch('/api/analysis/bidder-patterns').then(r=>r.json());
+  if (d.error) { document.getElementById('patterns-result').innerHTML = `<div class="alert alert-error">${d.error}</div>`; return; }
+
+  document.getElementById('patterns-result').innerHTML = `
+    <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Item Type</th><th>Bidder</th><th>Bids</th><th>Avg Unit $</th><th>Min Unit $</th></tr></thead>
+      <tbody>${(d.rows||[]).map(r=>`
+        <tr>
+          <td><span class="badge badge-grey">${r.item_type||'?'}</span></td>
+          <td>${r.bidder}</td>
+          <td class="num">${r.bid_count}</td>
+          <td class="money">$${fmt2(r.avg_unit_price)}</td>
+          <td class="money">$${fmt2(r.min_unit_price)}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table></div>`;
+}
+
+// ---------------------------------------------------------------- SUBSET OPTIMIZATION
+let _subsetData = null;   // cache last result for drill-down
+
+async function runSubsetEnum() {
+  const id = document.getElementById('analysis-rfq-select').value;
+  if (!id) { alert('Select an RFQ first.'); return; }
+  document.getElementById('subset-summary').innerHTML = '<div class="inline-load"><span class="loading"></span> Enumerating subsets…</div>';
+  document.getElementById('subset-detail').style.display = 'none';
+
+  const d = await fetch(`/api/analysis/subset-enum/${id}`).then(r => r.json());
+  if (d.error) {
+    document.getElementById('subset-summary').innerHTML = `<div class="alert alert-error">${d.error}</div>`;
+    return;
+  }
+  _subsetData = d;
+
+  const baseline = d.results[0]?.total_cost;
+  const maxCost  = baseline || 1;
+
+  // Build a bar-chart-style progress bar representing savings
+  const rows = d.results.map(r => {
+    const pct   = r.total_cost != null ? (r.total_cost / maxCost * 100).toFixed(1) : 100;
+    const bar   = `<div style="background:var(--blue);height:10px;border-radius:4px;width:${pct}%;min-width:4px;transition:width .4s"></div>`;
+    const savK1 = r.savings_vs_k1_pct != null
+      ? `<span class="text-green">▼ ${r.savings_vs_k1_pct}%</span>` : '—';
+    const savPrev = r.savings_vs_prev_pct != null
+      ? `<span class="text-green">▼ ${r.savings_vs_prev_pct}%</span>` : '—';
+    const covBadge = r.uncovered_count > 0
+      ? `<span class="badge badge-amber">${r.items_covered}/${r.items_total}</span>`
+      : `<span class="badge badge-green">${r.items_covered}/${r.items_total}</span>`;
+
+    return `<tr style="cursor:pointer" onclick="showSubsetDetail(${r.k})" title="Click to see item-by-item breakdown">
+      <td style="font-size:1.1rem;font-weight:800;text-align:center">${r.k}</td>
+      <td>${r.best_subset.map(b => `<span class="badge badge-blue" style="margin:1px">${b}</span>`).join(' ')}</td>
+      <td class="money"><strong>$${fmt2(r.total_cost)}</strong></td>
+      <td style="min-width:120px">${bar}</td>
+      <td style="text-align:center">${savK1}</td>
+      <td style="text-align:center">${savPrev}</td>
+      <td style="text-align:center">${covBadge}</td>
+      <td><span class="badge badge-grey btn-sm">Detail →</span></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('subset-summary').innerHTML = `
+    <div class="alert alert-info" style="margin-bottom:14px">
+      Evaluated ${d.all_bidders.length} bidders (${d.all_bidders.join(', ')}) across ${d.item_count} items.
+      Click any row to see the item-by-item award breakdown for that subset size.
+    </div>
+    <div class="tbl-wrap">
+    <table>
+      <thead><tr>
+        <th style="text-align:center"># Bidders</th>
+        <th>Best Combination</th>
+        <th>Total Cost</th>
+        <th>Relative Cost</th>
+        <th>Saved vs 1-Bidder</th>
+        <th>Saved vs k-1</th>
+        <th>Coverage</th>
+        <th></th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>
+    <p style="font-size:.78rem;color:var(--grey);margin-top:8px">
+      Total cost = sum of lowest ext. price per item within the subset. Uncovered items (no bidder quoted) are excluded from cost.
+    </p>`;
+}
+
+function showSubsetDetail(k) {
+  if (!_subsetData) return;
+  const result = _subsetData.results.find(r => r.k === k);
+  if (!result) return;
+
+  document.getElementById('subset-detail-title').textContent =
+    `k=${k} — ${result.best_subset.join(' + ')} — Total: $${fmt2(result.total_cost)}`;
+
+  // Collect all bidders in this subset for column headers
+  const bidders = result.best_subset;
+
+  const thead = `<tr>
+    <th>Item</th><th>Type</th><th>Specification</th>
+    <th>Qty</th><th>Unit</th>
+    ${bidders.map(b => `<th class="money">${b}</th>`).join('')}
+    <th>Awarded To</th><th class="money">Awarded $</th>
+  </tr>`;
+
+  const tbody = result.per_item.map(it => {
+    const cells = bidders.map(b => {
+      const v = it.all_quotes[b];
+      const isWinner = it.awarded_to === b;
+      const style = isWinner ? 'font-weight:700;color:var(--green)' : '';
+      return `<td class="money" style="${style}">${v != null ? '$'+fmt2(v) : '<span style="color:#ccc">—</span>'}</td>`;
+    }).join('');
+
+    const awardCell = it.awarded_to
+      ? `<span class="badge badge-green">${it.awarded_to}</span>`
+      : `<span class="badge badge-red">No Quote</span>`;
+
+    return `<tr>
+      <td>${it.item_number}</td>
+      <td><span class="badge badge-grey">${it.item_type||'?'}</span></td>
+      <td style="font-size:.75rem;max-width:220px">${it.specification||''}${it.size?' ('+it.size+')':''}</td>
+      <td class="num">${it.quantity||''}</td>
+      <td>${it.unit||''}</td>
+      ${cells}
+      <td>${awardCell}</td>
+      <td class="money">${it.awarded_cost != null ? '$'+fmt2(it.awarded_cost) : '—'}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('subset-detail-table').innerHTML = `
+    <table><thead>${thead}</thead><tbody>${tbody}</tbody></table>`;
+  document.getElementById('subset-detail').style.display = 'block';
+  document.getElementById('subset-detail').scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+// ---------------------------------------------------------------- COST ESTIMATION
+let _estimateData = null;
+
+const CONF_STYLE = {
+  HIGH:   'badge-green',
+  MEDIUM: 'badge-amber',
+  LOW:    'badge-red',
+  NONE:   'badge-grey',
+};
+
+async function runEstimate() {
+  const id = document.getElementById('analysis-rfq-select').value;
+  if (!id) { alert('Select an RFQ first.'); return; }
+
+  document.getElementById('estimate-summary').innerHTML = '<div class="inline-load"><span class="loading"></span> Matching against historical bids…</div>';
+  document.getElementById('estimate-table').innerHTML   = '';
+  document.getElementById('estimate-detail').style.display = 'none';
+
+  const d = await fetch(`/api/analysis/estimate/${id}`).then(r => r.json());
+  if (d.error) {
+    document.getElementById('estimate-summary').innerHTML = `<div class="alert alert-error">${d.error}</div>`;
+    return;
+  }
+  _estimateData = d;
+
+  // ── Summary banner ──────────────────────────────────────────────────────
+  const cd = d.confidence_dist;
+  document.getElementById('estimate-summary').innerHTML = `
+    <div class="alert alert-info" style="display:flex;flex-wrap:wrap;gap:20px;align-items:center">
+      <span><strong>${d.item_count}</strong> items &nbsp;|&nbsp;
+            <strong>${d.covered}</strong> matched &nbsp;|&nbsp;
+            <strong>${d.uncovered}</strong> no history</span>
+      <span>Confidence:
+        <span class="badge badge-green"  style="margin:0 2px">HIGH ${cd.HIGH}</span>
+        <span class="badge badge-amber"  style="margin:0 2px">MED ${cd.MEDIUM}</span>
+        <span class="badge badge-red"    style="margin:0 2px">LOW ${cd.LOW}</span>
+        <span class="badge badge-grey"   style="margin:0 2px">NONE ${cd.NONE}</span>
+      </span>
+    </div>
+    <div class="stats-row" style="margin-top:12px">
+      <div class="stat-box">
+        <div class="val" style="font-size:1.3rem">$${fmt2(d.total_est_low)}</div>
+        <div class="lbl">Estimated Low (all-min)</div>
+      </div>
+      <div class="stat-box" style="border:2px solid var(--blue)">
+        <div class="val" style="font-size:1.3rem;color:var(--blue)">$${fmt2(d.total_est_mean)}</div>
+        <div class="lbl">Estimated Mean (weighted)</div>
+      </div>
+      <div class="stat-box">
+        <div class="val" style="font-size:1.3rem">$${fmt2(d.total_est_high)}</div>
+        <div class="lbl">Estimated High (all-max)</div>
+      </div>
+    </div>`;
+
+  // ── Item table ───────────────────────────────────────────────────────────
+  const rows = d.estimates.map((e, idx) => {
+    const confBadge = `<span class="badge ${CONF_STYLE[e.confidence]}">${e.confidence}</span>`;
+    const hasData   = e.est_unit_mean != null;
+    return `<tr style="cursor:${e.matches.length?'pointer':'default'}"
+               onclick="${e.matches.length ? `showEstimateDetail(${idx})` : ''}"
+               title="${e.matches.length ? 'Click for match detail' : 'No historical matches'}">
+      <td>${e.item_number}</td>
+      <td><span class="badge badge-grey">${e.item_type||'?'}</span></td>
+      <td style="font-size:.75rem;max-width:220px">${e.specification||''}${e.size?' ('+e.size+')':''}</td>
+      <td class="num">${e.quantity||''} ${e.unit||''}</td>
+      <td style="text-align:center">${confBadge}</td>
+      <td class="money">${hasData ? '$'+fmt2(e.est_unit_min)  : '—'}</td>
+      <td class="money" style="font-weight:${hasData?'700':'400'}">${hasData ? '$'+fmt2(e.est_unit_mean) : '—'}</td>
+      <td class="money">${hasData ? '$'+fmt2(e.est_unit_max)  : '—'}</td>
+      <td class="money">${hasData ? '$'+fmt2(e.est_ext_mean)  : '—'}</td>
+      <td style="font-size:.75rem">${(e.bidders_seen||[]).map(b=>`<span class="badge badge-blue" style="margin:1px;font-size:.7rem">${b}</span>`).join('')}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('estimate-table').innerHTML = `
+    <div class="tbl-wrap">
+    <table>
+      <thead><tr>
+        <th>Item</th><th>Type</th><th>Specification</th><th>Qty</th>
+        <th>Confidence</th>
+        <th class="money">Est. Min $/unit</th>
+        <th class="money">Est. Mean $/unit</th>
+        <th class="money">Est. Max $/unit</th>
+        <th class="money">Est. Extended</th>
+        <th>Bidders in History</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>
+    <p style="font-size:.78rem;color:var(--grey);margin-top:6px">
+      Click a row to see the matched historical bids used for the estimate.
+      Mean price is weighted by specification similarity score.
+    </p>`;
+}
+
+function showEstimateDetail(idx) {
+  if (!_estimateData) return;
+  const e = _estimateData.estimates[idx];
+  if (!e || !e.matches.length) return;
+
+  document.getElementById('estimate-detail-title').textContent =
+    `Matches for Item ${e.item_number}: ${e.item_type} — ${e.specification}`;
+
+  const rows = e.matches.map(m => `
+    <tr>
+      <td>${m.rfq_id}</td>
+      <td>${m.rfq_date||'—'}</td>
+      <td>${m.bidder}</td>
+      <td style="font-size:.75rem;max-width:240px">${m.specification||''}${m.size?' ('+m.size+')':''}</td>
+      <td class="money">$${fmt2(m.unit_price)}</td>
+      <td class="num">
+        <div style="display:flex;align-items:center;gap:6px">
+          <div style="background:var(--blue);height:8px;border-radius:4px;width:${Math.round(m.match_score*100)}px;min-width:3px"></div>
+          ${Math.round(m.match_score*100)}%
+        </div>
+      </td>
+    </tr>`).join('');
+
+  document.getElementById('estimate-detail-matches').innerHTML = `
+    <table>
+      <thead><tr><th>RFQ</th><th>Date</th><th>Bidder</th><th>Matched Specification</th><th class="money">Unit Price</th><th>Match Score</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+  document.getElementById('estimate-detail').style.display = 'block';
+  document.getElementById('estimate-detail').scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+// ---------------------------------------------------------------- UTILS
+function fmt2(v) {
+  if (v == null || isNaN(v)) return '—';
+  return Number(v).toLocaleString('en-US', {minimumFractionDigits:2,maximumFractionDigits:2});
+}
+
+// ---------------------------------------------------------------- INIT
+checkAuth();
+checkApiKey();
+loadDashboard();
+</script>
+</body>
+</html>

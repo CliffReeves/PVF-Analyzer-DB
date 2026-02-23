@@ -1,0 +1,36 @@
+# Environment & secrets
+.env
+
+# Database
+rfq_database.db
+
+# Spreadsheet data
+*.xlsx
+*.xls
+
+# Uploaded files
+uploads/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.suo
+*.user
+
+# OS
+.DS_Store
+Thumbs.db
