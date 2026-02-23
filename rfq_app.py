@@ -59,7 +59,7 @@ oauth.register(
 )
 
 # Public paths that don't require authentication
-_PUBLIC_PATHS = {"/auth/login", "/auth/callback", "/auth/logout"}
+_PUBLIC_PATHS = {"/auth/login", "/auth/callback", "/auth/logout", "/health"}
 
 @app.before_request
 def require_login():
@@ -73,6 +73,11 @@ def require_login():
 # ---------------------------------------------------------------------------
 # Auth routes
 # ---------------------------------------------------------------------------
+
+@app.route("/health")
+def health():
+    return "OK", 200
+
 
 @app.route("/auth/login")
 def auth_login():
