@@ -8,7 +8,6 @@ Then open: http://localhost:5050
 import os
 import re
 import json
-import calendar
 import traceback
 from pathlib import Path
 from flask import Flask, request, jsonify, send_from_directory, session, redirect, url_for
@@ -142,11 +141,11 @@ rfq_db.init_db(DB_PATH)
 def _parse_filename_metadata(filename):
     """
     Extract RFQ metadata from filenames matching the pattern:
-        St{station}_{project}_{creator}_{MM-D-YYYY}.xlsx
+        St{station}_{rfq_id}_{creator}_{MM-D-YYYY}.xlsx
 
-    Example: St155_LgBore_HGA_10-3-2025.xlsx
-      → station="155", project="LgBore", creator="HGA",
-        rfq_date="2025-10-03", rfq_id="HGA-LgBore-2025-OCT"
+    Example: St105_ME0003_AUDUBON_11-10-2025.xlsx
+      → station="St105", rfq_id="ME0003", creator="AUDUBON",
+        rfq_date="2025-11-10"
 
     Returns a dict on success, or None if the filename doesn't match.
     """
@@ -154,17 +153,15 @@ def _parse_filename_metadata(filename):
     m = re.match(r'^[Ss][Tt](\w+)_(\w+)_(\w+)_(\d{1,2}-\d{1,2}-\d{4})$', name)
     if not m:
         return None
-    station_raw, project, creator, date_raw = m.groups()
+    station_raw, rfq_id, creator, date_raw = m.groups()
     try:
         month, day, year = (int(p) for p in date_raw.split('-'))
         rfq_date = f"{year:04d}-{month:02d}-{day:02d}"
     except (ValueError, IndexError):
         return None
-    month_abbr = calendar.month_abbr[month].upper()
-    rfq_id = f"{creator}-{project}-{year}-{month_abbr}"
     return {
-        "station":  station_raw,
-        "project":  project,
+        "station":  f"St{station_raw}",
+        "project":  rfq_id,
         "creator":  creator,
         "rfq_date": rfq_date,
         "rfq_id":   rfq_id,
