@@ -22,7 +22,7 @@ import rfq_parser
 BASE_DIR   = Path(__file__).parent           # folder containing this file
 load_dotenv(BASE_DIR / ".env")
 
-DB_PATH    = str(BASE_DIR / "rfq_database.db")
+DB_PATH    = os.environ.get("DB_PATH", str(BASE_DIR / "rfq_database.db"))
 UPLOAD_DIR = BASE_DIR / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
 
