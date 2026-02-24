@@ -172,7 +172,7 @@ def _parse_filename_metadata(filename):
     Returns a dict on success, or None if the filename doesn't match.
     """
     name = os.path.splitext(filename)[0]
-    m = re.match(r'^[Ss][Tt](\w+)_(\w+)_(\w+)_(\d{1,2}-\d{1,2}-\d{4})$', name)
+    m = re.match(r'^[Ss][Tt](\w+)\s*_\s*(\w+)\s*_\s*(\w+)\s*_\s*(\d{1,2}-\d{1,2}-\d{4})$', name)
     if not m:
         return None
     station_raw, rfq_id, creator, date_raw = m.groups()
