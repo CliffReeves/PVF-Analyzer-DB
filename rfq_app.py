@@ -419,7 +419,7 @@ Rules:
 
         client = anthropic.Anthropic(api_key=api_key)
         msg = client.messages.create(
-            model="claude-opus-4-5-20251101",
+            model="claude-haiku-4-5-20251001",
             max_tokens=1024,
             system=system_prompt,
             messages=[{"role": "user", "content": question}]
@@ -461,7 +461,11 @@ Rules:
 
     except Exception as e:
         traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+        msg = str(e)
+        # Surface Anthropic auth errors clearly
+        if "401" in msg or "authentication" in msg.lower() or "api_key" in msg.lower():
+            return jsonify({"error": "Anthropic API key is missing or invalid. Add ANTHROPIC_API_KEY to Render's Environment settings."}), 400
+        return jsonify({"error": msg}), 500
 
 
 # ---------------------------------------------------------------------------
