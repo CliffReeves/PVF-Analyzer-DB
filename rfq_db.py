@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS rfqs (
     rfq_id       TEXT    PRIMARY KEY,
     creator      TEXT,
     station      TEXT,
+    project      TEXT,
     rfq_date     TEXT,
     source_file  TEXT,
     sheet_name   TEXT,
@@ -83,7 +84,12 @@ def init_db(db_path=None):
     """Create all tables if they don't exist yet."""
     conn = get_conn(db_path)
     conn.executescript(DDL)
-    conn.commit()
+    # Migrate: add project column to existing databases that pre-date this field
+    try:
+        conn.execute("ALTER TABLE rfqs ADD COLUMN project TEXT")
+        conn.commit()
+    except Exception:
+        pass  # Column already exists
     conn.close()
 
 
@@ -106,14 +112,14 @@ def delete_rfq(rfq_id, db_path=None):
     conn.close()
 
 
-def insert_rfq(rfq_id, creator, station, rfq_date, source_file, sheet_name,
+def insert_rfq(rfq_id, creator, station, project, rfq_date, source_file, sheet_name,
                is_potential=False, notes=None, db_path=None):
     conn = get_conn(db_path)
     conn.execute(
-        """INSERT INTO rfqs (rfq_id, creator, station, rfq_date, source_file,
+        """INSERT INTO rfqs (rfq_id, creator, station, project, rfq_date, source_file,
                              sheet_name, is_potential, notes)
-           VALUES (?,?,?,?,?,?,?,?)""",
-        (rfq_id, creator, station, rfq_date, source_file, sheet_name,
+           VALUES (?,?,?,?,?,?,?,?,?)""",
+        (rfq_id, creator, station, project, rfq_date, source_file, sheet_name,
          1 if is_potential else 0, notes)
     )
     conn.commit()
@@ -123,7 +129,7 @@ def insert_rfq(rfq_id, creator, station, rfq_date, source_file, sheet_name,
 def get_all_rfqs(db_path=None):
     conn = get_conn(db_path)
     rows = conn.execute(
-        """SELECT r.rfq_id, r.creator, r.station, r.rfq_date,
+        """SELECT r.rfq_id, r.creator, r.station, r.project, r.rfq_date,
                   r.source_file, r.sheet_name, r.is_potential, r.loaded_at,
                   COUNT(DISTINCT i.id)  AS item_count,
                   COUNT(DISTINCT b.bidder_id) AS bidder_count
@@ -196,7 +202,7 @@ def get_all_bidders(db_path=None):
 # Bulk load (called after parsing)
 # ---------------------------------------------------------------------------
 
-def load_parsed_rfq(rfq_id, creator, station, rfq_date, source_file, sheet_name,
+def load_parsed_rfq(rfq_id, creator, station, project, rfq_date, source_file, sheet_name,
                     parsed_data, is_potential=False, notes=None, db_path=None):
     """
     Insert an RFQ with all its items and bids in a single transaction.
@@ -209,10 +215,10 @@ def load_parsed_rfq(rfq_id, creator, station, rfq_date, source_file, sheet_name,
 
         # Insert RFQ header
         conn.execute(
-            """INSERT INTO rfqs (rfq_id, creator, station, rfq_date, source_file,
+            """INSERT INTO rfqs (rfq_id, creator, station, project, rfq_date, source_file,
                                  sheet_name, is_potential, notes)
-               VALUES (?,?,?,?,?,?,?,?)""",
-            (rfq_id, creator, station, rfq_date, source_file, sheet_name,
+               VALUES (?,?,?,?,?,?,?,?,?)""",
+            (rfq_id, creator, station, project, rfq_date, source_file, sheet_name,
              1 if is_potential else 0, notes)
         )
 

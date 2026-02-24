@@ -6,7 +6,9 @@ Then open: http://localhost:5050
 """
 
 import os
+import re
 import json
+import calendar
 import traceback
 from pathlib import Path
 from flask import Flask, request, jsonify, send_from_directory, session, redirect, url_for
@@ -134,6 +136,42 @@ rfq_db.init_db(DB_PATH)
 
 
 # ---------------------------------------------------------------------------
+# Filename metadata extractor
+# ---------------------------------------------------------------------------
+
+def _parse_filename_metadata(filename):
+    """
+    Extract RFQ metadata from filenames matching the pattern:
+        St{station}_{project}_{creator}_{MM-D-YYYY}.xlsx
+
+    Example: St155_LgBore_HGA_10-3-2025.xlsx
+      → station="155", project="LgBore", creator="HGA",
+        rfq_date="2025-10-03", rfq_id="HGA-LgBore-2025-OCT"
+
+    Returns a dict on success, or None if the filename doesn't match.
+    """
+    name = os.path.splitext(filename)[0]
+    m = re.match(r'^[Ss][Tt](\w+)_(\w+)_(\w+)_(\d{1,2}-\d{1,2}-\d{4})$', name)
+    if not m:
+        return None
+    station_raw, project, creator, date_raw = m.groups()
+    try:
+        month, day, year = (int(p) for p in date_raw.split('-'))
+        rfq_date = f"{year:04d}-{month:02d}-{day:02d}"
+    except (ValueError, IndexError):
+        return None
+    month_abbr = calendar.month_abbr[month].upper()
+    rfq_id = f"{creator}-{project}-{year}-{month_abbr}"
+    return {
+        "station":  station_raw,
+        "project":  project,
+        "creator":  creator,
+        "rfq_date": rfq_date,
+        "rfq_id":   rfq_id,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Static / SPA
 # ---------------------------------------------------------------------------
 
@@ -179,9 +217,10 @@ def parse_preview():
             return jsonify({"error": result["error"]}), 422
 
         # Build a concise preview for the UI
+        filename = os.path.basename(filepath)
         preview = {
             "filepath":    filepath,
-            "filename":    os.path.basename(filepath),
+            "filename":    filename,
             "sheets":      sheets,
             "sheet_used":  result["sheet"],
             "format":      result["format"],
@@ -189,6 +228,7 @@ def parse_preview():
             "item_count":  len(result["items"]),
             "ambiguities": result["ambiguities"],
             "sample_items": result["items"][:6],   # first 6 rows for display
+            "meta_hint":   _parse_filename_metadata(filename),  # None if pattern not matched
         }
         return jsonify(preview)
 
@@ -205,7 +245,7 @@ def parse_preview():
 def load_rfq():
     """
     Body (JSON):
-      rfq_id, creator, station, rfq_date, filepath, sheet_name,
+      rfq_id, creator, station, project, rfq_date, filepath, sheet_name,
       is_potential (bool), notes (optional)
     """
     try:
@@ -213,6 +253,7 @@ def load_rfq():
         rfq_id     = data.get("rfq_id", "").strip()
         creator    = data.get("creator", "").strip()
         station    = data.get("station", "").strip()
+        project    = data.get("project", "").strip() or None
         rfq_date   = data.get("rfq_date", "").strip()
         filepath   = data.get("filepath", "").strip()
         sheet_name = data.get("sheet_name") or None
@@ -229,7 +270,7 @@ def load_rfq():
             return jsonify({"error": parsed["error"]}), 422
 
         rfq_db.load_parsed_rfq(
-            rfq_id, creator, station, rfq_date,
+            rfq_id, creator, station, project, rfq_date,
             os.path.basename(filepath), parsed["sheet"],
             parsed, is_potential=is_pot, notes=notes,
             db_path=DB_PATH
