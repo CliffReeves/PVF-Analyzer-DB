@@ -10,11 +10,18 @@ import re
 import json
 import traceback
 from pathlib import Path
+
+print("[startup] 1 stdlib imports OK", flush=True)
+
 from flask import Flask, request, jsonify, send_from_directory, session, redirect, url_for
 from dotenv import load_dotenv
 
+print("[startup] 2 flask/dotenv imports OK", flush=True)
+
 import rfq_db
 import rfq_parser
+
+print("[startup] 3 local module imports OK", flush=True)
 
 # ---------------------------------------------------------------------------
 # Config
@@ -25,7 +32,12 @@ load_dotenv(BASE_DIR / ".env")
 
 DB_PATH    = os.environ.get("DB_PATH", str(BASE_DIR / "rfq_database.db"))
 UPLOAD_DIR = BASE_DIR / "uploads"
-UPLOAD_DIR.mkdir(exist_ok=True)
+try:
+    UPLOAD_DIR.mkdir(exist_ok=True)
+except Exception as _e:
+    print(f"[startup] WARNING: could not create uploads dir: {_e}", flush=True)
+
+print(f"[startup] 4 config OK — DB_PATH={DB_PATH}", flush=True)
 
 # Claude API key
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
@@ -38,6 +50,8 @@ ALLOWED_EMAIL_DOMAIN = os.environ.get("ALLOWED_EMAIL_DOMAIN", "")
 
 app = Flask(__name__, static_folder=str(BASE_DIR), static_url_path="")
 app.secret_key = SECRET_KEY
+
+print("[startup] 5 Flask app created OK", flush=True)
 
 # Trust Render's (and any reverse proxy's) X-Forwarded-Proto / X-Forwarded-Host
 # headers so url_for(_external=True) produces https:// URLs correctly.
@@ -58,6 +72,8 @@ oauth.register(
     server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
     client_kwargs={"scope": "openid email profile"},
 )
+
+print("[startup] 6 OAuth registered OK", flush=True)
 
 # Public paths that don't require authentication
 _PUBLIC_PATHS = {"/auth/login", "/auth/callback", "/auth/logout", "/health"}
@@ -133,9 +149,11 @@ def api_me():
 # Initialise DB on startup — wrapped so a bad DB_PATH doesn't crash gunicorn
 try:
     rfq_db.init_db(DB_PATH)
-    print(f"[startup] DB initialised at {DB_PATH}", flush=True)
+    print(f"[startup] 7 DB initialised at {DB_PATH}", flush=True)
 except Exception as _db_err:
-    print(f"[startup] WARNING: DB init failed ({_db_err}) — app will start but DB calls will fail", flush=True)
+    print(f"[startup] 7 WARNING: DB init failed ({_db_err}) — app will start but DB calls will fail", flush=True)
+
+print("[startup] 8 ALL DONE — routes loading", flush=True)
 
 
 # ---------------------------------------------------------------------------
