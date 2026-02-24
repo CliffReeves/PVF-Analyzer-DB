@@ -130,8 +130,12 @@ def api_me():
     return jsonify(session.get("user", {}))
 
 
-# Initialise DB on startup
-rfq_db.init_db(DB_PATH)
+# Initialise DB on startup — wrapped so a bad DB_PATH doesn't crash gunicorn
+try:
+    rfq_db.init_db(DB_PATH)
+    print(f"[startup] DB initialised at {DB_PATH}", flush=True)
+except Exception as _db_err:
+    print(f"[startup] WARNING: DB init failed ({_db_err}) — app will start but DB calls will fail", flush=True)
 
 
 # ---------------------------------------------------------------------------
