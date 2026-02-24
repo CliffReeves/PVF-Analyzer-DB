@@ -270,10 +270,9 @@
         </span>
       </div>
       <div class="form-row">
-        <div class="form-group"><label>RFQ ID *</label><input type="text" id="rfq-id" placeholder="e.g. HGA-LgBore-2025-OCT"></div>
+        <div class="form-group"><label>RFQ ID *</label><input type="text" id="rfq-id" placeholder="e.g. ME0003"></div>
         <div class="form-group"><label>Created By</label><input type="text" id="rfq-creator"></div>
-        <div class="form-group"><label>Station</label><input type="text" id="rfq-station" placeholder="e.g. 155"></div>
-        <div class="form-group"><label>Project</label><input type="text" id="rfq-project" placeholder="e.g. LgBore"></div>
+        <div class="form-group"><label>Station</label><input type="text" id="rfq-station" placeholder="e.g. St105"></div>
         <div class="form-group"><label>RFQ Date</label><input type="date" id="rfq-date"></div>
       </div>
       <div class="form-row">
@@ -537,7 +536,6 @@ async function loadDashboard() {
     <tr>
       <td><a href="#" onclick="viewRFQ('${r.rfq_id}');return false">${r.rfq_id}</a></td>
       <td>${r.station||'—'}</td>
-      <td>${r.project||'—'}</td>
       <td>${r.rfq_date||'—'}</td>
       <td>${r.creator||'—'}</td>
       <td class="num">${r.item_count}</td>
@@ -547,8 +545,8 @@ async function loadDashboard() {
 
   document.getElementById('dashboard-table').innerHTML = `
     <table>
-      <thead><tr><th>RFQ ID</th><th>Station</th><th>Project</th><th>Date</th><th>Creator</th><th>Items</th><th>Bidders</th><th>Status</th></tr></thead>
-      <tbody>${tbody || '<tr><td colspan="8" class="empty-state">No RFQs loaded yet.</td></tr>'}</tbody>
+      <thead><tr><th>RFQ ID</th><th>Station</th><th>Date</th><th>Creator</th><th>Items</th><th>Bidders</th><th>Status</th></tr></thead>
+      <tbody>${tbody || '<tr><td colspan="7" class="empty-state">No RFQs loaded yet.</td></tr>'}</tbody>
     </table>`;
 }
 
@@ -560,7 +558,6 @@ async function loadBrowse() {
     <tr>
       <td><a href="#" onclick="viewRFQ('${r.rfq_id}');return false">${r.rfq_id}</a></td>
       <td>${r.station||'—'}</td>
-      <td>${r.project||'—'}</td>
       <td>${r.rfq_date||'—'}</td>
       <td>${r.creator||'—'}</td>
       <td class="num">${r.item_count}</td>
@@ -575,8 +572,8 @@ async function loadBrowse() {
 
   document.getElementById('browse-table').innerHTML = `
     <table>
-      <thead><tr><th>RFQ ID</th><th>Station</th><th>Project</th><th>Date</th><th>Creator</th><th>Items</th><th>Bidders</th><th>Source File</th><th>Status</th><th>Actions</th></tr></thead>
-      <tbody>${tbody||'<tr><td colspan="10" style="text-align:center;padding:30px;color:#999">No RFQs loaded yet.</td></tr>'}</tbody>
+      <thead><tr><th>RFQ ID</th><th>Station</th><th>Date</th><th>Creator</th><th>Items</th><th>Bidders</th><th>Source File</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody>${tbody||'<tr><td colspan="9" style="text-align:center;padding:30px;color:#999">No RFQs loaded yet.</td></tr>'}</tbody>
     </table>`;
 }
 
@@ -619,7 +616,6 @@ async function viewRFQ(id) {
   document.getElementById('modal-content').innerHTML = `
     <div style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:16px;font-size:.875rem">
       <div><b>Station:</b> ${d.station||'—'}</div>
-      ${d.project ? `<div><b>Project:</b> ${d.project}</div>` : ''}
       <div><b>Date:</b> ${d.rfq_date||'—'}</div>
       <div><b>Creator:</b> ${d.creator||'—'}</div>
       <div><b>Source:</b> ${d.source_file||'—'} / ${d.sheet_name||'—'}</div>
@@ -751,7 +747,6 @@ function showPreview(d) {
     document.getElementById('rfq-id').value      = h.rfq_id   || '';
     document.getElementById('rfq-creator').value = h.creator  || '';
     document.getElementById('rfq-station').value = h.station  || '';
-    document.getElementById('rfq-project').value = h.project  || '';
     document.getElementById('rfq-date').value    = h.rfq_date || '';
     badge.style.display = 'inline';
   } else {
@@ -791,7 +786,6 @@ async function doLoad() {
     rfq_id,
     creator:      document.getElementById('rfq-creator').value.trim(),
     station:      document.getElementById('rfq-station').value.trim(),
-    project:      document.getElementById('rfq-project').value.trim(),
     rfq_date:     document.getElementById('rfq-date').value,
     filepath:     previewData.filepath,
     sheet_name:   document.getElementById('rfq-sheet').value,
@@ -827,7 +821,7 @@ function resetLoad() {
   document.getElementById('btn-preview').disabled = true;
   document.getElementById('btn-load').disabled = false;
   document.getElementById('btn-load').innerHTML = '✓ Load into Database';
-  ['rfq-id','rfq-creator','rfq-station','rfq-project','rfq-date','rfq-notes'].forEach(id=>document.getElementById(id).value='');
+  ['rfq-id','rfq-creator','rfq-station','rfq-date','rfq-notes'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('meta-auto-badge').style.display = 'none';
   document.getElementById('load-status').innerHTML = '';
   document.getElementById('reload-warning').style.display = 'none';
