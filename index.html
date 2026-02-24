@@ -741,39 +741,35 @@ function showPreview(d) {
   }
 
   // Auto-fill metadata from filename if the server extracted a hint
-  // Always clear all metadata fields before populating for this file
+  // Clear immediately, then re-clear and populate after a short delay so any
+  // browser autofill that fires in the gap is overwritten by our values.
   ['rfq-id','rfq-creator','rfq-station','rfq-date','rfq-notes'].forEach(id=>document.getElementById(id).value='');
-  console.log('[showPreview] filename:', d.filename, '| meta_hint:', d.meta_hint);
   const badge = document.getElementById('meta-auto-badge');
-  if (d.meta_hint) {
-    const h = d.meta_hint;
-    document.getElementById('rfq-id').value      = h.rfq_id   || '';
-    document.getElementById('rfq-creator').value = h.creator  || '';
-    document.getElementById('rfq-station').value = h.station  || '';
-    document.getElementById('rfq-date').value    = h.rfq_date || '';
-    badge.style.display = 'inline';
-    console.log('[showPreview] set fields from meta_hint:', h);
-  } else {
-    badge.style.display = 'none';
-    // Fallback: try to extract date from filename directly
-    const m = d.filename.match(/(\d{1,2}[-–]\d{1,2}[-–]\d{2,4})/);
-    if (m) {
-      try {
-        const parts = m[1].split(/[-–]/);
-        if (parts.length === 3) {
-          const yr = parts[2].length===2 ? '20'+parts[2] : parts[2];
-          document.getElementById('rfq-date').value = `${yr}-${parts[0].padStart(2,'0')}-${parts[1].padStart(2,'0')}`;
-          console.log('[showPreview] no meta_hint — date only from filename:', document.getElementById('rfq-date').value);
-        }
-      } catch(e){}
+  badge.style.display = 'none';
+
+  setTimeout(() => {
+    ['rfq-id','rfq-creator','rfq-station','rfq-date','rfq-notes'].forEach(id=>document.getElementById(id).value='');
+    if (d.meta_hint) {
+      const h = d.meta_hint;
+      document.getElementById('rfq-id').value      = h.rfq_id   || '';
+      document.getElementById('rfq-creator').value = h.creator  || '';
+      document.getElementById('rfq-station').value = h.station  || '';
+      document.getElementById('rfq-date').value    = h.rfq_date || '';
+      badge.style.display = 'inline';
     } else {
-      console.log('[showPreview] no meta_hint and no date found in filename');
+      // Fallback: try to extract date from filename directly
+      const m = d.filename.match(/(\d{1,2}[-–]\d{1,2}[-–]\d{2,4})/);
+      if (m) {
+        try {
+          const parts = m[1].split(/[-–]/);
+          if (parts.length === 3) {
+            const yr = parts[2].length===2 ? '20'+parts[2] : parts[2];
+            document.getElementById('rfq-date').value = `${yr}-${parts[0].padStart(2,'0')}-${parts[1].padStart(2,'0')}`;
+          }
+        } catch(e){}
+      }
     }
-  }
-  console.log('[showPreview] final field values — rfq-id:', document.getElementById('rfq-id').value,
-    'creator:', document.getElementById('rfq-creator').value,
-    'station:', document.getElementById('rfq-station').value,
-    'date:', document.getElementById('rfq-date').value);
+  }, 200);
 }
 
 document.getElementById('rfq-id').addEventListener('input', async function() {
