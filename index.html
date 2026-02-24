@@ -741,6 +741,8 @@ function showPreview(d) {
   }
 
   // Auto-fill metadata from filename if the server extracted a hint
+  // Always clear all metadata fields before populating for this file
+  ['rfq-id','rfq-creator','rfq-station','rfq-date','rfq-notes'].forEach(id=>document.getElementById(id).value='');
   const badge = document.getElementById('meta-auto-badge');
   if (d.meta_hint) {
     const h = d.meta_hint;
@@ -753,7 +755,7 @@ function showPreview(d) {
     badge.style.display = 'none';
     // Fallback: try to extract date from filename directly
     const m = d.filename.match(/(\d{1,2}[-–]\d{1,2}[-–]\d{2,4})/);
-    if (m && !document.getElementById('rfq-date').value) {
+    if (m) {
       try {
         const parts = m[1].split(/[-–]/);
         if (parts.length === 3) {
