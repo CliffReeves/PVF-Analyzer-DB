@@ -474,13 +474,14 @@ Rules:
                 rows = rfq_db.run_query(sql, DB_PATH)
             except Exception as qe:
                 sql_error = str(qe)
+                print(f"[SQL error] intent={expl!r} sql={sql!r} error={sql_error!r}")
 
         # ── STAGE 2: Natural-Language Synthesis ──────────────────────────────
         MAX_ROWS = 80
         if sql_error:
-            data_block = f"The SQL query failed with error: {sql_error}"
+            data_block = f"The data retrieval failed. Intent was: {expl}. Error: {sql_error}"
         elif not sql:
-            data_block = "No SQL was generated (the question may not require database access)."
+            data_block = "No data retrieval was needed for this question."
         elif not rows:
             data_block = "The query returned zero results."
         else:
@@ -492,16 +493,24 @@ Rules:
         synth_system = f"""You are a procurement analyst assistant helping field engineers understand
 PVF (Pipes, Valves and Fittings) bid data. Communicate in clear, direct prose.
 
+The database has these tables (for your reference when errors occur):
+- rfqs: rfq_id, station, rfq_date
+- rfq_items: id, rfq_id, item_type, specification, size, unit, quantity
+- bids: id, rfq_id, item_id, bidder_id, unit_price, ext_price
+- bidders: id, name
+{rfq_filter}
+
 Guidelines:
 - Answer in natural language. Do NOT show raw JSON or Python data structures.
 - You MAY include a markdown table if it genuinely aids comprehension (e.g. comparing
   multiple bidders side by side), but prefer prose when the data is simple.
-- Do NOT mention SQL, databases, or technical implementation details.
+- Do NOT mention SQL or database internals.
 - Use dollar formatting for prices (e.g. $1,234.56).
 - Keep the answer concise but complete. If there are many rows, summarise the key findings.
-- If zero results were returned, say so clearly and suggest why.
-- If an error occurred, explain it in plain English without exposing the SQL error message.
-{rfq_filter}"""
+- If zero results were returned, say so clearly and suggest why (e.g. no bids for that type).
+- If data retrieval failed, say "I wasn't able to retrieve that — try rephrasing the question."
+  Do NOT ask questions about the database structure; the schema is fixed and known.
+"""
 
         stage2_messages = [{"role": h["role"], "content": h["content"]} for h in trimmed_history]
         stage2_messages.append({
