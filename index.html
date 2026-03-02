@@ -146,6 +146,55 @@
   }
   .suggestion:hover { background: #dbeafe; }
 
+  /* ---- CHAT ---- */
+  #chat-thread {
+    display: flex; flex-direction: column; gap: 16px;
+    min-height: 120px; max-height: 520px; overflow-y: auto;
+    padding: 4px 2px 8px; scroll-behavior: smooth;
+  }
+  .chat-empty {
+    text-align: center; padding: 32px 0 16px; color: var(--grey); font-size: .875rem;
+  }
+  .chat-row { display: flex; align-items: flex-end; gap: 10px; }
+  .chat-row.user      { flex-direction: row-reverse; }
+  .chat-row.assistant { flex-direction: row; }
+  .chat-bubble {
+    max-width: 82%; padding: 12px 16px; border-radius: 14px;
+    font-size: .875rem; line-height: 1.55; word-break: break-word;
+  }
+  .chat-row.user .chat-bubble {
+    background: var(--navy); color: #e8f0fe; border-bottom-right-radius: 4px;
+  }
+  .chat-row.assistant .chat-bubble {
+    background: #fff; border: 1px solid var(--border); color: #1e293b;
+    border-bottom-left-radius: 4px; box-shadow: var(--shadow);
+  }
+  .chat-bubble.thinking {
+    background: #f8fafc; border: 1px dashed var(--border); color: var(--grey);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .chat-bubble.error { background: #fef2f2; border-color: #fca5a5; color: #7f1d1d; }
+  .chat-bubble table { border-collapse: collapse; font-size: .8rem; margin: 10px 0; width: 100%; }
+  .chat-bubble th { background: var(--sky); color: var(--navy); padding: 6px 10px; text-align: left; font-weight: 700; }
+  .chat-bubble td { padding: 5px 10px; border-bottom: 1px solid var(--border); }
+  .chat-avatar {
+    width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: .7rem; font-weight: 700;
+  }
+  .chat-row.user      .chat-avatar { background: var(--blue); color: #fff; }
+  .chat-row.assistant .chat-avatar { background: var(--sky);  color: var(--navy); }
+  #chat-input-row {
+    display: flex; gap: 10px; align-items: flex-end;
+    margin-top: 14px; border-top: 1px solid var(--border); padding-top: 14px;
+  }
+  #chat-input {
+    flex: 1; padding: 10px 14px; border: 2px solid var(--border); border-radius: 8px;
+    font-size: .9rem; resize: none; min-height: 44px; max-height: 120px;
+    line-height: 1.45; font-family: inherit; transition: border-color .15s;
+  }
+  #chat-input:focus { border-color: var(--blue); outline: none; }
+
   /* ---- ANALYSIS ---- */
   .tab-bar { display: flex; gap: 0; border-bottom: 2px solid var(--border); margin-bottom: 20px; }
   .tab-btn {
@@ -316,29 +365,31 @@
 <!-- ============================================================ QUERY -->
 <div id="page-query" class="page">
   <div class="card">
-    <div class="card-title">AI-Powered Query</div>
-    <p style="font-size:.875rem;color:var(--grey);margin-bottom:14px">Ask anything about your RFQ database in plain English. Claude will generate and run the SQL.</p>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div>
+        <div class="card-title" style="margin-bottom:4px">AI Chat — PVF Bid Assistant</div>
+        <p style="font-size:.82rem;color:var(--grey);margin:0">Ask follow-up questions naturally. Answers are in plain English.</p>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="clearChat()" style="white-space:nowrap">Clear chat</button>
+    </div>
 
-    <div class="form-group">
+    <div class="form-group" style="max-width:320px;margin-bottom:14px">
       <label>Focus on a specific RFQ (optional)</label>
-      <select id="query-rfq-filter"><option value="">All RFQs</option></select>
+      <select id="query-rfq-filter" onchange="onRfqFilterChange()"><option value="">All RFQs</option></select>
     </div>
 
-    <label style="font-size:.82rem;font-weight:600;color:#475569;margin-bottom:5px;display:block">Your Question</label>
-    <textarea id="query-box" placeholder="e.g. What is the lowest total bid for RFQ HGA-2025-01?"></textarea>
-
-    <div class="query-suggestions" id="suggestions"></div>
-
-    <div class="flex-end mt-16">
-      <button class="btn btn-primary" id="btn-query" onclick="doQuery()">Ask Claude →</button>
+    <div id="chat-thread">
+      <div class="chat-empty" id="chat-empty-state">
+        <svg xmlns="http://www.w3.org/2000/svg" width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" style="margin:0 auto 10px;display:block;opacity:.35"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        Ask anything about your bid database.
+        <div class="query-suggestions" id="chat-suggestions" style="justify-content:center;margin-top:12px"></div>
+      </div>
     </div>
-  </div>
 
-  <div id="query-result" style="display:none" class="card">
-    <div class="card-title">Result</div>
-    <div id="query-explanation" class="alert alert-info" style="margin-bottom:12px"></div>
-    <div id="query-sql"></div>
-    <div id="query-table" class="mt-8"></div>
+    <div id="chat-input-row">
+      <textarea id="chat-input" rows="1" placeholder="Ask a question… (Enter to send, Shift+Enter for new line)" onkeydown="handleChatKey(event)"></textarea>
+      <button class="btn btn-primary" id="btn-chat-send" onclick="doQuery()">Send</button>
+    </div>
   </div>
 </div>
 
@@ -834,8 +885,9 @@ function resetLoad() {
   document.getElementById('reload-warning').style.display = 'none';
 }
 
-// ---------------------------------------------------------------- QUERY
-const SUGGESTIONS = [
+// ---------------------------------------------------------------- QUERY / CHAT
+
+const CHAT_SUGGESTIONS = [
   "What is the lowest total bid for the selected RFQ?",
   "Which bidder is consistently cheapest on pipes?",
   "Show me all valve bids sorted by unit price.",
@@ -846,71 +898,174 @@ const SUGGESTIONS = [
   "Which bidder has the most complete bids (fewest no-quotes)?",
 ];
 
+// Conversation history kept in memory: [{role, content}]
+let conversationHistory = [];
+
 async function loadQuerySelects() {
   const rfqs = await fetch('/api/rfqs').then(r=>r.json());
   const sel = document.getElementById('query-rfq-filter');
   sel.innerHTML = '<option value="">All RFQs</option>' + rfqs.map(r=>`<option value="${r.rfq_id}">${r.rfq_id} — ${r.station||''}</option>`).join('');
-
-  const sugg = document.getElementById('suggestions');
-  sugg.innerHTML = SUGGESTIONS.map(s=>`<span class="suggestion" onclick="fillQuery('${s.replace(/'/g,"\\'")}')">💬 ${s}</span>`).join('');
+  renderChatSuggestions();
 }
 
-function fillQuery(s) { document.getElementById('query-box').value = s; }
+function renderChatSuggestions() {
+  const sugg = document.getElementById('chat-suggestions');
+  if (!sugg) return;
+  sugg.innerHTML = CHAT_SUGGESTIONS.map(s=>`<span class="suggestion" onclick="fillChatInput('${s.replace(/'/g,"\\'")}')">💬 ${s}</span>`).join('');
+}
+
+function fillChatInput(s) {
+  document.getElementById('chat-input').value = s;
+  document.getElementById('chat-input').focus();
+}
+
+function onRfqFilterChange() {
+  if (conversationHistory.length > 0) {
+    if (confirm('Changing the RFQ filter will clear the current conversation. Continue?')) {
+      clearChat();
+    }
+  }
+}
+
+function clearChat() {
+  conversationHistory = [];
+  document.getElementById('chat-thread').innerHTML = `
+    <div class="chat-empty" id="chat-empty-state">
+      <svg xmlns="http://www.w3.org/2000/svg" width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" style="margin:0 auto 10px;display:block;opacity:.35"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      Ask anything about your bid database.
+      <div class="query-suggestions" id="chat-suggestions" style="justify-content:center;margin-top:12px"></div>
+    </div>`;
+  renderChatSuggestions();
+}
+
+function appendMessage(role, content, isThinking = false) {
+  const emptyState = document.getElementById('chat-empty-state');
+  if (emptyState) emptyState.remove();
+
+  const thread = document.getElementById('chat-thread');
+
+  const row = document.createElement('div');
+  row.className = `chat-row ${role}`;
+  if (isThinking) row.id = 'chat-thinking-row';
+
+  const avatar = document.createElement('div');
+  avatar.className = 'chat-avatar';
+  avatar.textContent = role === 'user' ? 'You' : 'AI';
+
+  const bubble = document.createElement('div');
+  bubble.className = 'chat-bubble' + (isThinking ? ' thinking' : '');
+
+  if (isThinking) {
+    bubble.innerHTML = '<span class="loading"></span> Thinking…';
+  } else if (role === 'user') {
+    bubble.textContent = content;
+  } else {
+    bubble.innerHTML = renderMarkdown(content);
+  }
+
+  row.appendChild(avatar);
+  row.appendChild(bubble);
+  thread.appendChild(row);
+  thread.scrollTop = thread.scrollHeight;
+  return row;
+}
+
+function renderMarkdown(text) {
+  // Escape HTML first to prevent XSS, then apply safe markdown transformations.
+  let s = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  // Fenced code blocks
+  s = s.replace(/```[\s\S]*?```/g, m => {
+    const inner = m.slice(3, m.lastIndexOf('```')).replace(/^\n/, '');
+    return `<pre style="background:#1e293b;color:#93c5fd;padding:10px;border-radius:6px;font-size:.8rem;overflow-x:auto;white-space:pre-wrap;margin:8px 0">${inner}</pre>`;
+  });
+
+  // Inline code
+  s = s.replace(/`([^`]+)`/g, '<code style="background:#f1f5f9;padding:2px 5px;border-radius:4px;font-size:.82rem">$1</code>');
+
+  // Markdown tables (| header | ... \n | --- | ... \n | row | ...)
+  s = s.replace(/(\|.+\|\n\|[-| :]+\|\n(?:\|.+\|\n?)+)/g, m => {
+    const lines = m.trim().split('\n');
+    const headers = lines[0].split('|').filter(c => c.trim() !== '');
+    const bodyLines = lines.slice(2);
+    const thead = '<thead><tr>' + headers.map(h => `<th>${h.trim()}</th>`).join('') + '</tr></thead>';
+    const tbody = '<tbody>' + bodyLines.map(line => {
+      const cells = line.split('|').filter(c => c.trim() !== '');
+      return '<tr>' + cells.map(c => `<td>${c.trim()}</td>`).join('') + '</tr>';
+    }).join('') + '</tbody>';
+    return `<table>${thead}${tbody}</table>`;
+  });
+
+  // Bold and italic
+  s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+  // Newlines
+  s = s.replace(/\n\n/g, '</p><p style="margin:8px 0 0">').replace(/\n/g, '<br>');
+  return `<p style="margin:0">${s}</p>`;
+}
 
 async function doQuery() {
-  const question = document.getElementById('query-box').value.trim();
-  if (!question) { alert('Please enter a question.'); return; }
+  const input    = document.getElementById('chat-input');
+  const question = input.value.trim();
+  if (!question) return;
 
-  document.getElementById('btn-query').disabled = true;
-  document.getElementById('btn-query').innerHTML = '<span class="loading"></span> Asking Claude…';
-  document.getElementById('query-result').style.display = 'none';
+  const rfq_id = document.getElementById('query-rfq-filter').value || undefined;
 
-  const payload = {
-    question,
-    rfq_id: document.getElementById('query-rfq-filter').value || undefined
-  };
+  input.value = '';
+  input.disabled = true;
+  input.style.height = 'auto';
+  document.getElementById('btn-chat-send').disabled = true;
 
-  const r = await fetch('/api/query', {method:'POST', body:JSON.stringify(payload), headers:{'Content-Type':'application/json'}});
-  const d = await r.json();
+  appendMessage('user', question);
+  const thinkingRow = appendMessage('assistant', '', true);
 
-  document.getElementById('btn-query').disabled = false;
-  document.getElementById('btn-query').innerHTML = 'Ask Claude →';
+  let d;
+  try {
+    const resp = await fetch('/api/query', {
+      method:  'POST',
+      body:    JSON.stringify({ question, rfq_id, history: conversationHistory.slice(-10) }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+    d = await resp.json();
+  } catch (fetchErr) {
+    d = { error: 'Network error — could not reach the server.' };
+  }
 
-  document.getElementById('query-result').style.display = 'block';
+  thinkingRow.remove();
+  input.disabled = false;
+  document.getElementById('btn-chat-send').disabled = false;
+  input.focus();
 
   if (d.error) {
-    document.getElementById('query-explanation').className = 'alert alert-error';
-    document.getElementById('query-explanation').textContent = d.error;
-    document.getElementById('query-sql').innerHTML = '';
-    document.getElementById('query-table').innerHTML = '';
+    const row = document.createElement('div');
+    row.className = 'chat-row assistant';
+    const av = document.createElement('div'); av.className = 'chat-avatar'; av.textContent = 'AI';
+    const bb = document.createElement('div'); bb.className = 'chat-bubble error'; bb.textContent = d.error;
+    row.appendChild(av); row.appendChild(bb);
+    const thread = document.getElementById('chat-thread');
+    thread.appendChild(row);
+    thread.scrollTop = thread.scrollHeight;
     return;
   }
 
-  document.getElementById('query-explanation').className = 'alert alert-info';
-  document.getElementById('query-explanation').textContent = d.explanation;
-  document.getElementById('query-sql').innerHTML = d.sql ? `<div class="sql-block">${d.sql}</div>` : '';
+  appendMessage('assistant', d.answer);
+  conversationHistory.push({ role: 'user',      content: question });
+  conversationHistory.push({ role: 'assistant', content: d.answer });
+}
 
-  if (d.error) {
-    document.getElementById('query-table').innerHTML = `<div class="alert alert-error">Query error: ${d.error}</div>`;
-    return;
+function handleChatKey(event) {
+  if (event.key === 'Enter' && !event.shiftKey) {
+    event.preventDefault();
+    doQuery();
   }
-
-  if (!d.rows || !d.rows.length) {
-    document.getElementById('query-table').innerHTML = '<p style="color:var(--grey);padding:16px">No results.</p>';
-    return;
-  }
-
-  const cols = Object.keys(d.rows[0]);
-  const thead = cols.map(c=>`<th>${c}</th>`).join('');
-  const tbody = d.rows.map(row => '<tr>' + cols.map(c=>{
-    const v = row[c];
-    const isNum = typeof v === 'number' && c.toLowerCase().includes('price');
-    return `<td class="${isNum?'money':''}">${v!=null ? (isNum?'$'+fmt2(v):v) : '—'}</td>`;
-  }).join('') + '</tr>').join('');
-
-  document.getElementById('query-table').innerHTML = `
-    <div class="tbl-wrap"><table><thead><tr>${thead}</tr></thead><tbody>${tbody}</tbody></table></div>
-    <p style="font-size:.78rem;color:var(--grey);margin-top:8px">${d.row_count} row(s) returned</p>`;
+  // Auto-grow textarea
+  const el = event.target;
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
 }
 
 // ---------------------------------------------------------------- ANALYSIS

@@ -365,14 +365,21 @@ def list_bidders():
 @app.route("/api/query", methods=["POST"])
 def ai_query():
     """
-    Body: { "question": "...", "rfq_id": "..." (optional) }
-    Uses Claude to interpret the question, generate SQL, execute it,
-    and return both the SQL and the formatted answer.
+    Body: {
+        "question": "...",
+        "rfq_id":   "..." (optional),
+        "history":  [{"role": "user"|"assistant", "content": "..."}] (optional)
+    }
+    Two-stage pipeline:
+      Stage 1 — SQL generation (history-aware): returns {sql, explanation}
+      Stage 2 — Natural-language synthesis: returns prose answer from query results
+    Returns: {"question": "...", "answer": "..."} or {"error": "..."}
     """
     try:
-        data      = request.get_json()
-        question  = data.get("question", "").strip()
-        rfq_id    = data.get("rfq_id")
+        data     = request.get_json()
+        question = data.get("question", "").strip()
+        rfq_id   = data.get("rfq_id")
+        history  = data.get("history", [])
 
         if not question:
             return jsonify({"error": "question is required"}), 400
@@ -388,9 +395,13 @@ def ai_query():
 
         rfq_filter = ""
         if rfq_id:
-            rfq_filter = f"\nThe user is focusing on RFQ '{rfq_id}'."
+            rfq_filter = f"\nThe user is currently focused on RFQ '{rfq_id}'."
 
-        system_prompt = f"""You are an expert data analyst for a Pipes, Valves and Fittings procurement database.
+        # Trim history to last 5 user+assistant pairs (10 messages)
+        trimmed_history = history[-10:]
+
+        # ── STAGE 1: SQL Generation ──────────────────────────────────────────
+        sql_system = f"""You are an expert data analyst for a Pipes, Valves and Fittings procurement database.
 {schema}
 
 Current data context:
@@ -399,9 +410,13 @@ Current data context:
 - Item types: {context['item_types']}
 {rfq_filter}
 
+You are part of a CONVERSATION. The user may ask follow-up questions that refer to previous answers.
+Use the conversation history to resolve pronouns and references (e.g. "now show just the pipes"
+means filter the previous query's scope to item_type = 'PIPE').
+
 Your job:
-1. Interpret the user's question.
-2. Write a SQLite SELECT query that answers it.
+1. Interpret the user's latest question in context of the conversation history.
+2. Write a single SQLite SELECT query that answers it.
 3. Return ONLY valid JSON in this exact format:
 {{
   "sql": "<the SELECT statement>",
@@ -417,47 +432,85 @@ Rules:
 - Monetary values are in USD.
 """
 
+        stage1_messages = [{"role": h["role"], "content": h["content"]} for h in trimmed_history]
+        stage1_messages.append({"role": "user", "content": question})
+
         client = anthropic.Anthropic(api_key=api_key)
-        msg = client.messages.create(
+        msg1 = client.messages.create(
             model="claude-haiku-4-5-20251001",
             max_tokens=1024,
-            system=system_prompt,
-            messages=[{"role": "user", "content": question}]
+            system=sql_system,
+            messages=stage1_messages,
         )
 
-        raw = msg.content[0].text.strip()
+        raw1 = msg1.content[0].text.strip()
 
-        # Parse Claude's JSON response
         try:
-            # Strip any markdown code fences
-            clean = raw
-            if clean.startswith("```"):
-                clean = "\n".join(clean.split("\n")[1:])
-            if clean.endswith("```"):
-                clean = "\n".join(clean.split("\n")[:-1])
-            ai_resp = json.loads(clean.strip())
+            clean1 = raw1
+            if clean1.startswith("```"):
+                clean1 = "\n".join(clean1.split("\n")[1:])
+            if clean1.endswith("```"):
+                clean1 = "\n".join(clean1.split("\n")[:-1])
+            ai_resp1 = json.loads(clean1.strip())
         except json.JSONDecodeError:
-            return jsonify({"error": "AI returned non-JSON", "raw": raw}), 500
+            return jsonify({"error": "AI returned non-JSON in Stage 1", "raw": raw1}), 500
 
-        sql  = ai_resp.get("sql", "")
-        expl = ai_resp.get("explanation", "")
+        sql  = ai_resp1.get("sql", "").strip()
+        expl = ai_resp1.get("explanation", "")
 
-        rows = []
-        error = None
+        # ── Execute SQL ──────────────────────────────────────────────────────
+        rows      = []
+        sql_error = None
         if sql:
             try:
                 rows = rfq_db.run_query(sql, DB_PATH)
             except Exception as qe:
-                error = str(qe)
+                sql_error = str(qe)
 
-        return jsonify({
-            "question":    question,
-            "sql":         sql,
-            "explanation": expl,
-            "rows":        rows,
-            "row_count":   len(rows),
-            "error":       error,
+        # ── STAGE 2: Natural-Language Synthesis ──────────────────────────────
+        MAX_ROWS = 80
+        if sql_error:
+            data_block = f"The SQL query failed with error: {sql_error}"
+        elif not sql:
+            data_block = "No SQL was generated (the question may not require database access)."
+        elif not rows:
+            data_block = "The query returned zero results."
+        else:
+            display_rows = rows[:MAX_ROWS]
+            data_block   = json.dumps(display_rows)
+            if len(rows) > MAX_ROWS:
+                data_block += f"\n\n[Note: showing first {MAX_ROWS} of {len(rows)} rows]"
+
+        synth_system = f"""You are a procurement analyst assistant helping field engineers understand
+PVF (Pipes, Valves and Fittings) bid data. Communicate in clear, direct prose.
+
+Guidelines:
+- Answer in natural language. Do NOT show raw JSON or Python data structures.
+- You MAY include a markdown table if it genuinely aids comprehension (e.g. comparing
+  multiple bidders side by side), but prefer prose when the data is simple.
+- Do NOT mention SQL, databases, or technical implementation details.
+- Use dollar formatting for prices (e.g. $1,234.56).
+- Keep the answer concise but complete. If there are many rows, summarise the key findings.
+- If zero results were returned, say so clearly and suggest why.
+- If an error occurred, explain it in plain English without exposing the SQL error message.
+{rfq_filter}"""
+
+        stage2_messages = [{"role": h["role"], "content": h["content"]} for h in trimmed_history]
+        stage2_messages.append({
+            "role": "user",
+            "content": f"Question: {question}\n\nQuery intent: {expl}\n\nData retrieved:\n{data_block}"
         })
+
+        msg2 = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=1024,
+            system=synth_system,
+            messages=stage2_messages,
+        )
+
+        answer = msg2.content[0].text.strip()
+
+        return jsonify({"question": question, "answer": answer})
 
     except Exception as e:
         traceback.print_exc()
