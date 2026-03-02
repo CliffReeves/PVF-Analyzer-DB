@@ -401,6 +401,19 @@ def ai_query():
         trimmed_history = history[-10:]
 
         # ── STAGE 1: SQL Generation ──────────────────────────────────────────
+        # Build a plain-text history block for the system prompt so Stage 1
+        # only ever sees one user message and cannot imitate the prose format
+        # that appears in previous assistant turns.
+        history_block = ""
+        if trimmed_history:
+            pairs = []
+            for i in range(0, len(trimmed_history) - 1, 2):
+                q = trimmed_history[i]["content"]
+                a = trimmed_history[i + 1]["content"] if i + 1 < len(trimmed_history) else ""
+                pairs.append(f"User asked: {q}\nAnswer given: {a}")
+            if pairs:
+                history_block = "\n\nConversation so far (for resolving follow-up references only):\n" + "\n\n".join(pairs)
+
         sql_system = f"""You are an expert data analyst for a Pipes, Valves and Fittings procurement database.
 {schema}
 
@@ -408,16 +421,12 @@ Current data context:
 - RFQs loaded: {json.dumps(context['rfqs'], indent=2)}
 - Known bidders: {context['bidders']}
 - Item types: {context['item_types']}
-{rfq_filter}
-
-You are part of a CONVERSATION. The user may ask follow-up questions that refer to previous answers.
-Use the conversation history to resolve pronouns and references (e.g. "now show just the pipes"
-means filter the previous query's scope to item_type = 'PIPE').
+{rfq_filter}{history_block}
 
 Your job:
-1. Interpret the user's latest question in context of the conversation history.
+1. Interpret the user's question (use the conversation above to resolve any follow-up references).
 2. Write a single SQLite SELECT query that answers it.
-3. Return ONLY valid JSON in this exact format:
+3. Return ONLY valid JSON in this exact format — nothing else:
 {{
   "sql": "<the SELECT statement>",
   "explanation": "<one sentence describing what the query does>"
@@ -432,8 +441,7 @@ Rules:
 - Monetary values are in USD.
 """
 
-        stage1_messages = [{"role": h["role"], "content": h["content"]} for h in trimmed_history]
-        stage1_messages.append({"role": "user", "content": question})
+        stage1_messages = [{"role": "user", "content": question}]
 
         client = anthropic.Anthropic(api_key=api_key)
         msg1 = client.messages.create(
