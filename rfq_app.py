@@ -454,13 +454,13 @@ Rules:
         raw1 = msg1.content[0].text.strip()
 
         try:
-            clean1 = raw1
-            if clean1.startswith("```"):
-                clean1 = "\n".join(clean1.split("\n")[1:])
-            if clean1.endswith("```"):
-                clean1 = "\n".join(clean1.split("\n")[:-1])
-            ai_resp1 = json.loads(clean1.strip())
+            import re as _re
+            m = _re.search(r'\{[\s\S]*\}', raw1)
+            if not m:
+                raise json.JSONDecodeError("no JSON object found", raw1, 0)
+            ai_resp1 = json.loads(m.group(0))
         except json.JSONDecodeError:
+            print(f"[Stage1 non-JSON raw]: {raw1}")
             return jsonify({"error": "AI returned non-JSON in Stage 1", "raw": raw1}), 500
 
         sql  = ai_resp1.get("sql", "").strip()
